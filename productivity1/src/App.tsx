@@ -5,7 +5,7 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from '@hello-pangea/dnd'
 
-import { PiTelevision, PiFolder, PiNotePencil, PiStack, PiCalendar, PiMoon, PiSun, PiPlus, PiList, PiPencilSimple, PiTrash, PiCaretDown, PiFilePlus, PiImage, PiSmiley, PiTag, PiCheckCircle, PiWarningCircle, PiX, PiCaretLeft, PiCaretRight, PiCornersOut, PiCornersIn } from 'react-icons/pi'
+import { PiTelevision, PiFolder, PiNotePencil, PiStack, PiCalendar, PiMoon, PiSun, PiPlus, PiList, PiPencilSimple, PiTrash, PiCaretDown, PiFilePlus, PiImage, PiTag, PiCheckCircle, PiWarningCircle, PiX, PiCaretLeft, PiCaretRight, PiCornersOut, PiCornersIn } from 'react-icons/pi'
 
 import { GlobalSearch } from './components/GlobalSearch'
 import '@blocknote/core/fonts/inter.css'
@@ -122,8 +122,6 @@ function App() {
     const lastOpenedDaily = localStorage.getItem('last_opened_daily');
     const lastOpenedWeekly = localStorage.getItem('last_opened_weekly');
 
-    let needsRefetchHistory = false;
-
     // Reset Harian
     if (!lastOpenedDaily) {
       localStorage.setItem('last_opened_daily', todayStr);
@@ -134,7 +132,6 @@ function App() {
         await supabase.from('goals_history').insert([{ date: lastOpenedDaily, mode: 'daily', progress: prog }]);
         await supabase.from('goals').update({ is_done: false }).eq('mode', 'daily');
         currentGoals = currentGoals.map(g => g.mode === 'daily' ? { ...g, done: false } : g);
-        needsRefetchHistory = true;
       }
       localStorage.setItem('last_opened_daily', todayStr);
     }
@@ -149,7 +146,6 @@ function App() {
         await supabase.from('goals_history').insert([{ date: lastOpenedWeekly, mode: 'weekly', progress: prog }]);
         await supabase.from('goals').update({ is_done: false }).eq('mode', 'weekly');
         currentGoals = currentGoals.map(g => g.mode === 'weekly' ? { ...g, done: false } : g);
-        needsRefetchHistory = true;
       }
       localStorage.setItem('last_opened_weekly', currentMondayStr);
     }
@@ -208,7 +204,6 @@ function App() {
     if (noteContextMenu) { window.addEventListener('click', closeNoteContextMenu); return () => window.removeEventListener('click', closeNoteContextMenu) }
   }, [contextMenu, noteContextMenu])
 
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen)
   const toggleTheme = () => setIsDarkMode(!isDarkMode)
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -236,8 +231,8 @@ function App() {
   const handleAddGoal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (goalInput.trim()) {
-      const { data, error } = await supabase.from('goals').insert([{ text: goalInput.trim(), mode: goalMode, is_done: false }]).select().single();
-      if (data) { setGoals([...goals, { id: data.id, text: data.text, done: data.is_done, mode: data.mode }]); setGoalInput(''); } else if (error) showToast('Gagal menambah goal', 'error');
+      const { data } = await supabase.from('goals').insert([{ text: goalInput.trim(), mode: goalMode, is_done: false }]).select().single();
+      if (data) { setGoals([...goals, { id: data.id, text: data.text, done: data.is_done, mode: data.mode }]); setGoalInput(''); } else { showToast('Gagal menambah goal', 'error'); }
     }
   };
 
@@ -254,10 +249,10 @@ function App() {
     if (!value) return
 
     if (inputModal.mode === 'create_folder') {
-      const { data, error } = await supabase.from('folders').insert([{ name: value, color: color, is_open: true }]).select().single();
+      const { data } = await supabase.from('folders').insert([{ name: value, color: color, is_open: true }]).select().single();
       if (data) { setFolders(prev => [...prev, { id: data.id, name: data.name, isOpen: data.is_open, notes: [], color: data.color }]); showToast('Folder berhasil dibuat') }
     } else if (inputModal.mode === 'create_note' && inputModal.folderId) {
-      const { data, error } = await supabase.from('notes').insert([{ folder_id: inputModal.folderId, title: value, type: 'note' }]).select().single();
+      const { data } = await supabase.from('notes').insert([{ folder_id: inputModal.folderId, title: value, type: 'note' }]).select().single();
       if (data) {
         const newNote: Note = { id: data.id, title: data.title, type: data.type, tags: [], icon: '', cover: '' }
         setFolders(prev => prev.map(f => f.id === inputModal.folderId ? { ...f, notes: [...f.notes, newNote], isOpen: true } : f)); setActiveNote(newNote); setActiveView('note'); showToast('Catatan berhasil dibuat')
@@ -270,7 +265,7 @@ function App() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const taskData = { title: formData.get('title') as string, category: formData.get('category') as string, date: taskModal.defaultDate, status: 'To Do' };
-    const { data, error } = await supabase.from('tasks').insert([taskData]).select().single();
+    const { data } = await supabase.from('tasks').insert([taskData]).select().single();
     if (data) { setTasks([...tasks, data as Task]); setTaskModal({ ...taskModal, isOpen: false }); showToast('Tugas berhasil ditambahkan') }
   }
 
@@ -280,7 +275,7 @@ function App() {
     const title = formData.get('title') as string;
     if (!title) return;
     const taskData = { title, category: formData.get('category') as string, date: quickAddPopover.date, status: 'To Do' };
-    const { data, error } = await supabase.from('tasks').insert([taskData]).select().single();
+    const { data } = await supabase.from('tasks').insert([taskData]).select().single();
     if (data) { setTasks(prev => [...prev, data as Task]); showToast('Tugas berhasil ditambahkan'); setQuickAddPopover({ isOpen: false, target: null, date: '' }); }
   }
 
@@ -289,7 +284,7 @@ function App() {
     const formData = new FormData(e.currentTarget);
     if (!editEventModal.event) return;
     const updatedData = { title: formData.get('title') as string, category: formData.get('category') as string, date: editEventModal.event.date, status: formData.get('status') as string, };
-    const { data, error } = await supabase.from('tasks').update(updatedData).eq('id', editEventModal.event.id).select().single();
+    const { data } = await supabase.from('tasks').update(updatedData).eq('id', editEventModal.event.id).select().single();
     if (data) { setTasks(prev => prev.map(t => t.id === data.id ? (data as Task) : t)); setEditEventModal({ isOpen: false, event: null }); showToast('Event berhasil diubah'); }
   };
 
