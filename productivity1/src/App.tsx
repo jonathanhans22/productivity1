@@ -4,17 +4,33 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from '@hello-pangea/dnd'
-import { PiTelevision, PiFolder, PiNotePencil, PiStack, PiCalendar, PiTimer, PiMoon, PiSun, PiPlus, PiList, PiPencilSimple, PiTrash, PiCaretDown, PiFilePlus, PiSquaresFour, PiImage, PiSmiley, PiTag, PiCheckCircle, PiWarningCircle, PiX } from 'react-icons/pi'
+
+import { PiTelevision, PiFolder, PiNotePencil, PiStack, PiCalendar, PiMoon, PiSun, PiPlus, PiList, PiPencilSimple, PiTrash, PiCaretDown, PiFilePlus, PiImage, PiSmiley, PiTag, PiCheckCircle, PiWarningCircle, PiX, PiCaretLeft, PiCaretRight, PiCornersOut, PiCornersIn } from 'react-icons/pi'
+
 import { GlobalSearch } from './components/GlobalSearch'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
 import './App.css'
 import { supabase } from './lib/supabase'
 
-type Note = { id: string; title: string; type: 'note' | 'canvas'; content?: any }
+type Note = { id: string; title: string; type: 'note'; content?: any; tags?: string[]; icon?: string; cover?: string; }
 type Folder = { id: string; name: string; isOpen: boolean; notes: Note[]; color: string }
 type Task = { id: string; title: string; date: string; category: string; status: string }
 type SearchResult = { id: string; title: string; type: 'task' | 'note'; folderId?: string; }
+
+// Tipe Data untuk Riwayat Kebiasaan
+type GoalHistory = { id: string; date: string; mode: 'daily' | 'weekly'; progress: number; }
+
+const EMOJI_LIST = ['😀', '🚀', '🔥', '💻', '📝', '✨', '🌟', '💡', '📌', '🎯', '🎨', '📊', '📈', '🧠', '⚡', '✅', '🎈', '🎉', '🏆', '📚', '🎵', '☕', '✈️', '🌿'];
+const COVER_LIST = [
+  'linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)',
+  'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)',
+  'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)',
+  'linear-gradient(120deg, #f093fb 0%, #f5576c 100%)',
+  'linear-gradient(to right, #4facfe 0%, #00f2fe 100%)',
+  'linear-gradient(to right, #43e97b 0%, #38f9d7 100%)',
+  '#1e2029', '#333645'
+];
 
 function EditorWrapper({ note, isDarkMode }: { note: Note, isDarkMode: boolean }) {
   const initialContent = note.content && typeof note.content === 'string'
@@ -40,16 +56,7 @@ function EditorWrapper({ note, isDarkMode }: { note: Note, isDarkMode: boolean }
 const CustomDateInput = forwardRef<HTMLInputElement, any>(({ value, onClick }, ref) => (
   <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
     <PiCalendar style={{ position: 'absolute', left: '12px', color: 'var(--text-secondary)', fontSize: '1.2rem', pointerEvents: 'none', zIndex: 1 }} />
-    <input
-      type="text"
-      className="form-control"
-      style={{ paddingLeft: '38px', cursor: 'pointer', width: '100%' }}
-      value={value}
-      onClick={onClick}
-      ref={ref}
-      readOnly
-      placeholder="Pilih Tanggal..."
-    />
+    <input type="text" className="form-control" style={{ paddingLeft: '38px', cursor: 'pointer', width: '100%' }} value={value} onClick={onClick} ref={ref} readOnly placeholder="Pilih Tanggal..." />
   </div>
 ));
 
@@ -57,10 +64,7 @@ export const StrictModeDroppable = ({ children, ...props }: DroppableProps) => {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
     const animation = requestAnimationFrame(() => setEnabled(true));
-    return () => {
-      cancelAnimationFrame(animation);
-      setEnabled(false);
-    };
+    return () => { cancelAnimationFrame(animation); setEnabled(false); };
   }, []);
   if (!enabled) return null;
   return <Droppable {...props}>{children}</Droppable>;
@@ -68,44 +72,93 @@ export const StrictModeDroppable = ({ children, ...props }: DroppableProps) => {
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isZenMode, setIsZenMode] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(true)
-
-  const isDark = isDarkMode || document.documentElement.getAttribute('data-theme') === 'dark';
 
   const [folders, setFolders] = useState<Folder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+
   const [goals, setGoals] = useState<{ id: string; text: string; done: boolean; mode: 'daily' | 'weekly' }[]>([]);
+  const [history, setHistory] = useState<GoalHistory[]>([]);
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  // FUNGSI UNTUK MENDAPATKAN TANGGAL HARI SENIN (Untuk Weekly Reset)
+  const getMonday = (d: Date) => {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.setDate(diff)).toLocaleDateString('en-CA');
+  }
+
   const fetchData = async () => {
+    // 1. Fetch Tasks & Folders
     const { data: tasksData } = await supabase.from('tasks').select('*');
     if (tasksData) setTasks(tasksData as Task[]);
 
+    const { data: foldersData } = await supabase.from('folders').select(`*, notes (*)`).order('created_at', { ascending: true });
+    if (foldersData) {
+      setFolders(foldersData.map((f: any) => ({
+        id: f.id, name: f.name, color: f.color, isOpen: f.is_open,
+        notes: (f.notes || []).map((n: any) => ({
+          id: n.id, title: n.title, type: n.type, content: n.content, tags: n.tags || [], icon: n.icon || '', cover: n.cover || ''
+        }))
+      })));
+    }
+
+    // 2. Fetch Goals
+    let currentGoals: any[] = [];
     const { data: goalsData } = await supabase.from('goals').select('*').order('created_at', { ascending: true });
     if (goalsData) {
-      setGoals(goalsData.map(g => ({ id: g.id, text: g.text, done: g.is_done, mode: g.mode as 'daily' | 'weekly' })));
+      currentGoals = goalsData.map(g => ({ id: g.id, text: g.text, done: g.is_done, mode: g.mode as 'daily' | 'weekly' }));
     }
 
-    const { data: foldersData } = await supabase.from('folders').select(`*, notes (*)`).order('created_at', { ascending: true });
+    // 3. LOGIKA RESET OTOMATIS (DAILY & WEEKLY)
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const currentMondayStr = getMonday(new Date());
 
-    if (foldersData) {
-      const formattedFolders: Folder[] = foldersData.map((f: any) => ({
-        id: f.id,
-        name: f.name,
-        color: f.color,
-        isOpen: f.is_open,
-        notes: (f.notes || []).map((n: any) => ({
-          id: n.id,
-          title: n.title,
-          type: n.type,
-          content: n.content
-        }))
-      }));
-      setFolders(formattedFolders);
+    const lastOpenedDaily = localStorage.getItem('last_opened_daily');
+    const lastOpenedWeekly = localStorage.getItem('last_opened_weekly');
+
+    let needsRefetchHistory = false;
+
+    // Reset Harian
+    if (!lastOpenedDaily) {
+      localStorage.setItem('last_opened_daily', todayStr);
+    } else if (lastOpenedDaily !== todayStr) {
+      const dailyGoals = currentGoals.filter(g => g.mode === 'daily');
+      if (dailyGoals.length > 0) {
+        const prog = Math.round((dailyGoals.filter(g => g.done).length / dailyGoals.length) * 100);
+        await supabase.from('goals_history').insert([{ date: lastOpenedDaily, mode: 'daily', progress: prog }]);
+        await supabase.from('goals').update({ is_done: false }).eq('mode', 'daily');
+        currentGoals = currentGoals.map(g => g.mode === 'daily' ? { ...g, done: false } : g);
+        needsRefetchHistory = true;
+      }
+      localStorage.setItem('last_opened_daily', todayStr);
     }
+
+    // Reset Mingguan (Hari Senin)
+    if (!lastOpenedWeekly) {
+      localStorage.setItem('last_opened_weekly', currentMondayStr);
+    } else if (lastOpenedWeekly !== currentMondayStr) {
+      const weeklyGoals = currentGoals.filter(g => g.mode === 'weekly');
+      if (weeklyGoals.length > 0) {
+        const prog = Math.round((weeklyGoals.filter(g => g.done).length / weeklyGoals.length) * 100);
+        await supabase.from('goals_history').insert([{ date: lastOpenedWeekly, mode: 'weekly', progress: prog }]);
+        await supabase.from('goals').update({ is_done: false }).eq('mode', 'weekly');
+        currentGoals = currentGoals.map(g => g.mode === 'weekly' ? { ...g, done: false } : g);
+        needsRefetchHistory = true;
+      }
+      localStorage.setItem('last_opened_weekly', currentMondayStr);
+    }
+
+    setGoals(currentGoals);
+
+    // 4. Fetch History
+    const { data: historyData } = await supabase.from('goals_history').select('*');
+    if (historyData) setHistory(historyData as GoalHistory[]);
   };
 
   const [goalMode, setGoalMode] = useState<'daily' | 'weekly'>('daily');
@@ -114,37 +167,35 @@ function App() {
   const filteredGoals = goals.filter(g => g.mode === goalMode);
   const progress = filteredGoals.length === 0 ? 0 : Math.round(filteredGoals.filter(g => g.done).length / filteredGoals.length * 100);
 
-  const [activeView, setActiveView] = useState<'dashboard' | 'note'>('dashboard')
+  const [activeView, setActiveView] = useState<'dashboard' | 'note' | 'tag'>('dashboard')
+  const [activeTag, setActiveTag] = useState<string>('')
   const [dashboardTab, setDashboardTab] = useState<'category' | 'calendar' | 'status'>('category')
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({})
 
+  const [kanbanFilter, setKanbanFilter] = useState<string>('all')
+
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string } | null>(null)
   const [noteContextMenu, setNoteContextMenu] = useState<{ x: number; y: number; noteId: string; folderId: string } | null>(null)
+
   const [renameModal, setRenameModal] = useState<{ isOpen: boolean; folderId: string; currentName: string; currentColor: string }>({ isOpen: false, folderId: '', currentName: '', currentColor: '' })
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; folderId: string; folderName: string }>({ isOpen: false, folderId: '', folderName: '' })
   const [renameNoteModal, setRenameNoteModal] = useState<{ isOpen: boolean; folderId: string; noteId: string; currentTitle: string }>({ isOpen: false, folderId: '', noteId: '', currentTitle: '' })
   const [deleteNoteModal, setDeleteNoteModal] = useState<{ isOpen: boolean; folderId: string; noteId: string; noteTitle: string }>({ isOpen: false, folderId: '', noteId: '', noteTitle: '' })
   const [deleteTaskModal, setDeleteTaskModal] = useState<{ isOpen: boolean; taskId: string; taskTitle: string }>({ isOpen: false, taskId: '', taskTitle: '' })
-  const [inputModal, setInputModal] = useState<{ isOpen: boolean; mode: 'create_folder' | 'create_note' | 'create_canvas'; folderId?: string }>({ isOpen: false, mode: 'create_folder' })
+  const [inputModal, setInputModal] = useState<{ isOpen: boolean; mode: 'create_folder' | 'create_note'; folderId?: string }>({ isOpen: false, mode: 'create_folder' })
   const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' }[]>([])
   const [quickAddPopover, setQuickAddPopover] = useState<{ isOpen: boolean; target: HTMLElement | null; date: string }>({ isOpen: false, target: null, date: '' });
+
   const [activeNote, setActiveNote] = useState<Note | null>(null)
 
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [showCoverPicker, setShowCoverPicker] = useState(false);
 
-  const [showTimerSetting, setShowTimerSetting] = useState(false)
-
-  const [taskModal, setTaskModal] = useState<{
-    isOpen: boolean;
-    defaultCategory: string;
-    defaultDate: string;
-  }>({ isOpen: false, defaultCategory: '', defaultDate: new Date().toISOString().split('T')[0] })
-
+  const [taskModal, setTaskModal] = useState<{ isOpen: boolean; defaultCategory: string; defaultDate: string; }>({ isOpen: false, defaultCategory: '', defaultDate: new Date().toISOString().split('T')[0] })
   const [editEventModal, setEditEventModal] = useState<{ isOpen: boolean; event: Task | null }>({ isOpen: false, event: null });
   const [eventNotes, setEventNotes] = useState<Record<string, string>>({});
   const [openEventDetail, setOpenEventDetail] = useState<{ isOpen: boolean; event: Task | null }>({ isOpen: false, event: null });
   const [eventPopover, setEventPopover] = useState<{ isOpen: boolean; target: HTMLElement | null; date: string }>({ isOpen: false, target: null, date: '' });
-
-  const editor = useCreateBlockNote()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light')
@@ -153,16 +204,9 @@ function App() {
   useEffect(() => {
     const closeContextMenu = () => setContextMenu(null)
     const closeNoteContextMenu = () => setNoteContextMenu(null)
-    if (contextMenu) {
-      window.addEventListener('click', closeContextMenu)
-      return () => window.removeEventListener('click', closeContextMenu)
-    }
-    if (noteContextMenu) {
-      window.addEventListener('click', closeNoteContextMenu)
-      return () => window.removeEventListener('click', closeNoteContextMenu)
-    }
+    if (contextMenu) { window.addEventListener('click', closeContextMenu); return () => window.removeEventListener('click', closeContextMenu) }
+    if (noteContextMenu) { window.addEventListener('click', closeNoteContextMenu); return () => window.removeEventListener('click', closeNoteContextMenu) }
   }, [contextMenu, noteContextMenu])
-
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen)
   const toggleTheme = () => setIsDarkMode(!isDarkMode)
@@ -173,17 +217,27 @@ function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
   }
 
+  const handleSelectIcon = async (iconStr: string) => {
+    if (!activeNote) return;
+    setActiveNote({ ...activeNote, icon: iconStr });
+    setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, icon: iconStr } : n) })));
+    setShowIconPicker(false);
+    try { await supabase.from('notes').update({ icon: iconStr }).eq('id', activeNote.id); } catch (e) { }
+  }
+
+  const handleSelectCover = async (coverStr: string) => {
+    if (!activeNote) return;
+    setActiveNote({ ...activeNote, cover: coverStr });
+    setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, cover: coverStr } : n) })));
+    setShowCoverPicker(false);
+    try { await supabase.from('notes').update({ cover: coverStr }).eq('id', activeNote.id); } catch (e) { }
+  }
+
   const handleAddGoal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (goalInput.trim()) {
-      const { data, error } = await supabase.from('goals').insert([{
-        text: goalInput.trim(), mode: goalMode, is_done: false
-      }]).select().single();
-
-      if (data) {
-        setGoals([...goals, { id: data.id, text: data.text, done: data.is_done, mode: data.mode }]);
-        setGoalInput('');
-      } else if (error) showToast('Gagal menambah goal', 'error');
+      const { data, error } = await supabase.from('goals').insert([{ text: goalInput.trim(), mode: goalMode, is_done: false }]).select().single();
+      if (data) { setGoals([...goals, { id: data.id, text: data.text, done: data.is_done, mode: data.mode }]); setGoalInput(''); } else if (error) showToast('Gagal menambah goal', 'error');
     }
   };
 
@@ -201,28 +255,12 @@ function App() {
 
     if (inputModal.mode === 'create_folder') {
       const { data, error } = await supabase.from('folders').insert([{ name: value, color: color, is_open: true }]).select().single();
-      if (data) {
-        setFolders(prev => [...prev, { id: data.id, name: data.name, isOpen: data.is_open, notes: [], color: data.color }])
-        showToast('Folder berhasil dibuat')
-      } else if (error) showToast('Gagal membuat folder', 'error');
-
+      if (data) { setFolders(prev => [...prev, { id: data.id, name: data.name, isOpen: data.is_open, notes: [], color: data.color }]); showToast('Folder berhasil dibuat') }
     } else if (inputModal.mode === 'create_note' && inputModal.folderId) {
       const { data, error } = await supabase.from('notes').insert([{ folder_id: inputModal.folderId, title: value, type: 'note' }]).select().single();
       if (data) {
-        const newNote: Note = { id: data.id, title: data.title, type: data.type }
-        setFolders(prev => prev.map(f => f.id === inputModal.folderId ? { ...f, notes: [...f.notes, newNote], isOpen: true } : f))
-        setActiveNote(newNote)
-        setActiveView('note')
-        showToast('Catatan berhasil dibuat')
-      }
-    } else if (inputModal.mode === 'create_canvas' && inputModal.folderId) {
-      const { data, error } = await supabase.from('notes').insert([{ folder_id: inputModal.folderId, title: value, type: 'canvas' }]).select().single();
-      if (data) {
-        const newNote: Note = { id: data.id, title: data.title, type: data.type }
-        setFolders(prev => prev.map(f => f.id === inputModal.folderId ? { ...f, notes: [...f.notes, newNote], isOpen: true } : f))
-        setActiveNote(newNote)
-        setActiveView('note')
-        showToast('Canvas berhasil dibuat')
+        const newNote: Note = { id: data.id, title: data.title, type: data.type, tags: [], icon: '', cover: '' }
+        setFolders(prev => prev.map(f => f.id === inputModal.folderId ? { ...f, notes: [...f.notes, newNote], isOpen: true } : f)); setActiveNote(newNote); setActiveView('note'); showToast('Catatan berhasil dibuat')
       }
     }
     setInputModal({ ...inputModal, isOpen: false })
@@ -231,19 +269,9 @@ function App() {
   const handleTaskSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const taskData = {
-      title: formData.get('title') as string,
-      category: formData.get('category') as string,
-      date: taskModal.defaultDate,
-      status: 'To Do'
-    };
-
+    const taskData = { title: formData.get('title') as string, category: formData.get('category') as string, date: taskModal.defaultDate, status: 'To Do' };
     const { data, error } = await supabase.from('tasks').insert([taskData]).select().single();
-    if (data) {
-      setTasks([...tasks, data as Task])
-      setTaskModal({ ...taskModal, isOpen: false })
-      showToast('Tugas berhasil ditambahkan')
-    } else if (error) showToast('Gagal menambah tugas', 'error');
+    if (data) { setTasks([...tasks, data as Task]); setTaskModal({ ...taskModal, isOpen: false }); showToast('Tugas berhasil ditambahkan') }
   }
 
   const handleQuickAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -251,40 +279,18 @@ function App() {
     const formData = new FormData(e.currentTarget);
     const title = formData.get('title') as string;
     if (!title) return;
-
-    const taskData = {
-      title,
-      category: formData.get('category') as string,
-      date: quickAddPopover.date,
-      status: 'To Do'
-    };
-
+    const taskData = { title, category: formData.get('category') as string, date: quickAddPopover.date, status: 'To Do' };
     const { data, error } = await supabase.from('tasks').insert([taskData]).select().single();
-    if (data) {
-      setTasks(prev => [...prev, data as Task]);
-      showToast('Tugas berhasil ditambahkan');
-      setQuickAddPopover({ isOpen: false, target: null, date: '' });
-    }
+    if (data) { setTasks(prev => [...prev, data as Task]); showToast('Tugas berhasil ditambahkan'); setQuickAddPopover({ isOpen: false, target: null, date: '' }); }
   }
 
   const handleEditEventSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     if (!editEventModal.event) return;
-
-    const updatedData = {
-      title: formData.get('title') as string,
-      category: formData.get('category') as string,
-      date: editEventModal.event.date,
-      status: formData.get('status') as string,
-    };
-
+    const updatedData = { title: formData.get('title') as string, category: formData.get('category') as string, date: editEventModal.event.date, status: formData.get('status') as string, };
     const { data, error } = await supabase.from('tasks').update(updatedData).eq('id', editEventModal.event.id).select().single();
-    if (data) {
-      setTasks(prev => prev.map(t => t.id === data.id ? (data as Task) : t));
-      setEditEventModal({ isOpen: false, event: null });
-      showToast('Event berhasil diubah');
-    }
+    if (data) { setTasks(prev => prev.map(t => t.id === data.id ? (data as Task) : t)); setEditEventModal({ isOpen: false, event: null }); showToast('Event berhasil diubah'); }
   };
 
   const toggleTaskStatus = async (taskId: string, currentStatus: string) => {
@@ -297,40 +303,22 @@ function App() {
   const confirmDeleteTask = async () => {
     const taskId = deleteTaskModal.taskId;
     const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-    if (!error) {
-      setTasks(prev => prev.filter(t => t.id !== taskId));
-      setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' })
-      showToast('Tugas berhasil dihapus')
-    }
+    if (!error) { setTasks(prev => prev.filter(t => t.id !== taskId)); setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' }); showToast('Tugas berhasil dihapus') }
   }
 
   const confirmDeleteFolder = async () => {
     const { folderId, folderName } = deleteModal
     const { error } = await supabase.from('folders').delete().eq('id', folderId);
-    if (!error) {
-      setFolders(prev => prev.filter(f => f.id !== folderId))
-      setTasks(prev => prev.filter(t => t.category !== folderName))
-      setDeleteModal({ isOpen: false, folderId: '', folderName: '' })
-      showToast('Folder berhasil dihapus')
-    }
+    if (!error) { setFolders(prev => prev.filter(f => f.id !== folderId)); setTasks(prev => prev.filter(t => t.category !== folderName)); setDeleteModal({ isOpen: false, folderId: '', folderName: '' }); showToast('Folder berhasil dihapus') }
   }
 
   const confirmDeleteNote = async () => {
     const { folderId, noteId } = deleteNoteModal
     const { error } = await supabase.from('notes').delete().eq('id', noteId);
     if (!error) {
-      setFolders(prev => prev.map(f => {
-        if (f.id === folderId) {
-          return { ...f, notes: f.notes.filter(n => n.id !== noteId) }
-        }
-        return f
-      }))
-      if (activeNote?.id === noteId) {
-        setActiveNote(null)
-        setActiveView('dashboard')
-      }
-      setDeleteNoteModal({ isOpen: false, folderId: '', noteId: '', noteTitle: '' })
-      showToast('Catatan berhasil dihapus')
+      setFolders(prev => prev.map(f => { if (f.id === folderId) { return { ...f, notes: f.notes.filter(n => n.id !== noteId) } } return f }))
+      if (activeNote?.id === noteId) { setActiveNote(null); setActiveView('dashboard') }
+      setDeleteNoteModal({ isOpen: false, folderId: '', noteId: '', noteTitle: '' }); showToast('Catatan berhasil dihapus')
     }
   }
 
@@ -340,21 +328,13 @@ function App() {
     const newName = formData.get('newName') as string
     const newColor = formData.get('folderColor') as string
     const { folderId, currentName: oldName, currentColor } = renameModal
-
-    if (!newName || (newName === oldName && newColor === currentColor)) {
-      setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' })
-      return
-    }
-
+    if (!newName || (newName === oldName && newColor === currentColor)) { setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' }); return }
     const { error } = await supabase.from('folders').update({ name: newName, color: newColor }).eq('id', folderId);
     if (!error) {
-      if (newName !== oldName) {
-        await supabase.from('tasks').update({ category: newName }).eq('category', oldName);
-      }
+      if (newName !== oldName) { await supabase.from('tasks').update({ category: newName }).eq('category', oldName); }
       setFolders(prev => prev.map(f => (f.id === folderId ? { ...f, name: newName, color: newColor } : f)))
       setTasks(prev => prev.map(t => (t.category === oldName ? { ...t, category: newName } : t)))
-      setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' })
-      showToast('Folder berhasil diubah')
+      setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' }); showToast('Folder berhasil diubah')
     }
   }
 
@@ -363,19 +343,12 @@ function App() {
     const formData = new FormData(e.currentTarget)
     const newTitle = formData.get('newNoteTitle') as string
     const { folderId, noteId } = renameNoteModal
-
     if (newTitle) {
       const { error } = await supabase.from('notes').update({ title: newTitle }).eq('id', noteId);
       if (!error) {
-        setFolders(prev => prev.map(f => {
-          if (f.id === folderId) {
-            return { ...f, notes: f.notes.map(n => n.id === noteId ? { ...n, title: newTitle } : n) }
-          }
-          return f
-        }))
+        setFolders(prev => prev.map(f => { if (f.id === folderId) { return { ...f, notes: f.notes.map(n => n.id === noteId ? { ...n, title: newTitle } : n) } } return f }))
         if (activeNote?.id === noteId) setActiveNote(prev => prev ? { ...prev, title: newTitle } : null)
-        setRenameNoteModal({ isOpen: false, folderId: '', noteId: '', currentTitle: '' })
-        showToast('Nama catatan berhasil diubah')
+        setRenameNoteModal({ isOpen: false, folderId: '', noteId: '', currentTitle: '' }); showToast('Nama catatan berhasil diubah')
       }
     }
   }
@@ -390,19 +363,14 @@ function App() {
 
   const onDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId } = result;
-
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
-
     const taskToMove = tasks.find(t => t.id === draggableId);
     if (!taskToMove) return;
-
     const destFolder = folders.find(f => f.id === destination.droppableId);
     const destCategory = destFolder ? destFolder.name : taskToMove.category;
-
     const newTasks = tasks.filter(t => t.id !== draggableId);
     const destinationTasks = newTasks.filter(t => t.category === destCategory);
-
     let insertionIndex;
     if (destination.index === 0) {
       const firstTaskOfCategory = newTasks.find(t => t.category === destCategory);
@@ -411,13 +379,9 @@ function App() {
       const taskBefore = destinationTasks[destination.index - 1];
       insertionIndex = newTasks.indexOf(taskBefore) + 1;
     }
-
     newTasks.splice(insertionIndex, 0, { ...taskToMove, category: destCategory });
     setTasks(newTasks);
-
-    if (taskToMove.category !== destCategory) {
-      await supabase.from('tasks').update({ category: destCategory }).eq('id', taskToMove.id);
-    }
+    if (taskToMove.category !== destCategory) { await supabase.from('tasks').update({ category: destCategory }).eq('id', taskToMove.id); }
   };
 
   const onNoteTitleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -429,105 +393,41 @@ function App() {
     }
   }
 
-
-  // === SISA FUNGSI UI BIASA ===
-
   const handleSearchResultClick = (result: SearchResult) => {
     if (result.type === 'note') {
       const note = folders.flatMap(f => f.notes).find(n => n.id === result.id);
-      if (note) {
-        setActiveNote(note);
-        setActiveView('note');
-      }
+      if (note) { setActiveNote(note); setActiveView('note'); }
     } else if (result.type === 'task') {
       const task = tasks.find(t => t.id === result.id);
       if (task) {
-        setActiveView('dashboard');
-        setDashboardTab('calendar');
-
-        // FIX: Pindah bulan kalender secara otomatis ke bulan task tersebut!
+        setActiveView('dashboard'); setDashboardTab('calendar');
         const [yearStr, monthStr] = task.date.split('-');
-        setCalendarYear(parseInt(yearStr, 10));
-        setCalendarMonth(parseInt(monthStr, 10) - 1);
-
-        setTimeout(() => {
-          const dayCell = document.querySelector(`.cal-day[data-date-str="${task.date}"]`);
-          if (dayCell) {
-            (dayCell as HTMLElement).click();
-          }
-        }, 100);
+        setCalendarYear(parseInt(yearStr, 10)); setCalendarMonth(parseInt(monthStr, 10) - 1);
+        setTimeout(() => { const dayCell = document.querySelector(`.cal-day[data-date-str="${task.date}"]`); if (dayCell) { (dayCell as HTMLElement).click(); } }, 100);
       }
     }
   };
 
-  const openEventPopover = (e: React.MouseEvent, date: string) => {
-    setEventPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date });
-  };
+  const openEventPopover = (e: React.MouseEvent, date: string) => { setEventPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date }); };
   const closeEventPopover = () => setEventPopover({ isOpen: false, target: null, date: '' });
-
-  const openQuickAdd = (e: React.MouseEvent, date: string) => {
-    setQuickAddPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date });
-  };
-
+  const openQuickAdd = (e: React.MouseEvent, date: string) => { setQuickAddPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date }); };
   const openTaskModal = (category: string = '', date?: string) => {
-    const validCategory = category || (folders[0]?.name || '');
-    const validDate = date || new Date().toISOString().split('T')[0];
+    const validCategory = category || (folders[0]?.name || ''); const validDate = date || new Date().toISOString().split('T')[0];
     setTaskModal({ isOpen: true, defaultCategory: validCategory, defaultDate: validDate });
   }
 
-  const handleContextMenu = (e: React.MouseEvent, folderId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setNoteContextMenu(null);
-    setContextMenu({ x: e.clientX, y: e.clientY, folderId })
-  }
-
-  const handleNoteContextMenu = (e: React.MouseEvent, noteId: string, folderId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setContextMenu(null);
-    setNoteContextMenu({ x: e.clientX, y: e.clientY, noteId, folderId })
-  }
-
+  const handleContextMenu = (e: React.MouseEvent, folderId: string) => { e.preventDefault(); e.stopPropagation(); setNoteContextMenu(null); setContextMenu({ x: e.clientX, y: e.clientY, folderId }) }
+  const handleNoteContextMenu = (e: React.MouseEvent, noteId: string, folderId: string) => { e.preventDefault(); e.stopPropagation(); setContextMenu(null); setNoteContextMenu({ x: e.clientX, y: e.clientY, noteId, folderId }) }
   const createNewFolder = () => setInputModal({ isOpen: true, mode: 'create_folder' })
   const handleAddNote = (folderId: string) => { setInputModal({ isOpen: true, mode: 'create_note', folderId }); setContextMenu(null) }
-  const handleAddCanvas = (folderId: string) => { setInputModal({ isOpen: true, mode: 'create_canvas', folderId }); setContextMenu(null) }
-
-  const openDeleteModal = (folderId: string) => {
-    const folder = folders.find(f => f.id === folderId)
-    if (folder) setDeleteModal({ isOpen: true, folderId, folderName: folder.name })
-  }
-
-  const openRenameModal = (folderId: string) => {
-    const folder = folders.find(f => f.id === folderId)
-    if (folder) setRenameModal({ isOpen: true, folderId, currentName: folder.name, currentColor: folder.color })
-  }
-
-  const toggleCategoryOnDashboard = (folderId: string) => {
-    setOpenCategories(prev => ({ ...prev, [folderId]: !(prev[folderId] ?? true) }))
-  }
-
-  const deleteTask = (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId)
-    if (task) setDeleteTaskModal({ isOpen: true, taskId, taskTitle: task.title })
-  }
+  const openDeleteModal = (folderId: string) => { const folder = folders.find(f => f.id === folderId); if (folder) setDeleteModal({ isOpen: true, folderId, folderName: folder.name }) }
+  const openRenameModal = (folderId: string) => { const folder = folders.find(f => f.id === folderId); if (folder) setRenameModal({ isOpen: true, folderId, currentName: folder.name, currentColor: folder.color }) }
+  const toggleCategoryOnDashboard = (folderId: string) => { setOpenCategories(prev => ({ ...prev, [folderId]: !(prev[folderId] ?? true) })) }
+  const deleteTask = (taskId: string) => { const task = tasks.find(t => t.id === taskId); if (task) setDeleteTaskModal({ isOpen: true, taskId, taskTitle: task.title }) }
 
   const calculatePopoverPosition = (target: HTMLElement | null) => {
-    if (!target) return {};
-    const rect = target.getBoundingClientRect();
-    const popoverHeight = 180;
-    const popoverWidth = 320;
-
-    let top;
-    let left = rect.left;
-    const margin = 2;
-
-    if (rect.bottom + margin + popoverHeight <= window.innerHeight) {
-      top = rect.bottom + margin;
-    } else {
-      top = rect.top - popoverHeight - margin;
-    }
-
+    if (!target) return {}; const rect = target.getBoundingClientRect(); const popoverHeight = 180; const popoverWidth = 320; let top; let left = rect.left; const margin = 2;
+    if (rect.bottom + margin + popoverHeight <= window.innerHeight) { top = rect.bottom + margin; } else { top = rect.top - popoverHeight - margin; }
     if (left + popoverWidth > window.innerWidth) left = window.innerWidth - popoverWidth - 12;
     return { top: Math.max(top, 8), left: Math.max(left, 8) };
   }
@@ -539,10 +439,6 @@ function App() {
   const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay()
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
-  const goToPrevYear = () => setCalendarYear(prev => prev - 1);
-  const goToNextYear = () => setCalendarYear(prev => prev + 1);
-  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => setCalendarMonth(Number(e.target.value));
-
   const activeFolder = activeNote ? folders.find(f => f.notes.some(n => n.id === activeNote.id)) : null
 
   const getCoverGradient = (id: string) => {
@@ -552,72 +448,179 @@ function App() {
     return gradients[index];
   }
 
-  return (
-    <div className="app-container">
-      <div className="aurora-bg"></div>
+  const allTags = Array.from(new Set(folders.flatMap(f => f.notes.flatMap(n => n.tags || [])))).sort();
 
-      <aside className={isSidebarOpen ? 'sidebar' : 'sidebar closed'}>
-        <div className="user-profile">
-          <div className="avatar">P</div>
-          <div className="user-info">
-            <span className="user-name">Active User</span>
-            <span className="user-plan">Private Workspace</span>
+  const handleAddTagToNote = async () => {
+    const newTag = window.prompt('Masukkan nama label baru:');
+    if (newTag && newTag.trim() && activeNote) {
+      const tagStr = newTag.trim().toLowerCase();
+      const currentTags = activeNote.tags || [];
+      if (!currentTags.includes(tagStr)) {
+        const updatedTags = [...currentTags, tagStr];
+        setActiveNote({ ...activeNote, tags: updatedTags });
+        setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, tags: updatedTags } : n) })));
+        await supabase.from('notes').update({ tags: updatedTags }).eq('id', activeNote.id);
+      }
+    }
+  }
+
+  const handleRemoveTagFromNote = async (tagToRemove: string) => {
+    if (activeNote) {
+      const updatedTags = (activeNote.tags || []).filter(t => t !== tagToRemove);
+      setActiveNote({ ...activeNote, tags: updatedTags });
+      setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, tags: updatedTags } : n) })));
+      await supabase.from('notes').update({ tags: updatedTags }).eq('id', activeNote.id);
+    }
+  }
+
+  // === RENDER LOGIC UNTUK HEATMAP (DAILY) ===
+  const renderHeatmap = () => {
+    const boxes = [];
+    // Menampilkan 28 hari ke belakang
+    for (let i = 27; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toLocaleDateString('en-CA');
+
+      const record = history.find(h => h.mode === 'daily' && h.date === dateStr);
+      const prog = record ? record.progress : 0;
+
+      let level = 0;
+      if (prog > 0 && prog <= 25) level = 1;
+      else if (prog > 25 && prog <= 50) level = 2;
+      else if (prog > 50 && prog <= 75) level = 3;
+      else if (prog > 75) level = 4;
+
+      boxes.push(
+        <div
+          key={dateStr}
+          className={`heatmap-box level-${level}`}
+          title={`${d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}: ${prog}% Selesai`}
+        />
+      );
+    }
+    return boxes;
+  };
+
+  // === RENDER LOGIC UNTUK KARTU (WEEKLY) ===
+  const renderWeeklyCards = () => {
+    const cards = [];
+    // 3 Minggu yang lalu
+    for (let i = 3; i >= 1; i--) {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1) - (i * 7);
+      const pastMondayStr = new Date(d.setDate(diff)).toLocaleDateString('en-CA');
+
+      const record = history.find(h => h.mode === 'weekly' && h.date === pastMondayStr);
+      const prog = record ? record.progress : 0;
+
+      cards.push(
+        <div key={pastMondayStr} className="weekly-card">
+          <span className="weekly-card-label">{i} Mg Lalu</span>
+          <div className="weekly-card-circle" style={{ '--progress': `${prog}%` } as React.CSSProperties}>
+            <span>{prog}%</span>
           </div>
         </div>
+      );
+    }
 
+    // Minggu saat ini (Real-time tracking)
+    cards.push(
+      <div key="current" className="weekly-card" style={{ borderColor: 'var(--accent)' }}>
+        <span className="weekly-card-label" style={{ color: 'var(--accent)' }}>Mg Ini</span>
+        <div className="weekly-card-circle" style={{ '--progress': `${progress}%` } as React.CSSProperties}>
+          <span>{progress}%</span>
+        </div>
+      </div>
+    );
+
+    return cards;
+  };
+
+  return (
+    <div className={`app-container ${isZenMode ? 'zen-mode' : ''}`} onClick={() => { setShowIconPicker(false); setShowCoverPicker(false); }}>
+      <div className="aurora-bg"></div>
+
+      {/* --- SIDEBAR RAIL (Ikon Navigasi Kiri) --- */}
+      {!isZenMode && (
+        <nav className="sidebar-rail" onClick={() => setIsSidebarOpen(false)}>
+          <div className="rail-avatar">CH</div>
+          <button className={`rail-icon ${activeView === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setActiveView('dashboard'); setDashboardTab('category'); setIsSidebarOpen(false); }} title="Dashboard"><PiTelevision /></button>
+          <button className={`rail-icon ${activeView === 'note' ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setActiveView('note'); setActiveNote(null); setIsSidebarOpen(true); }} title="My Folders & Notes"><PiFolder /></button>
+          <div style={{ marginTop: 'auto' }}>
+            <button className="rail-icon" onClick={(e) => { e.stopPropagation(); toggleTheme(); }} title="Toggle Theme">{isDarkMode ? <PiSun /> : <PiMoon />}</button>
+          </div>
+        </nav>
+      )}
+
+      {/* --- SIDEBAR PANEL (Panel Catatan & Folder) --- */}
+      <aside className={`sidebar-panel ${(!isSidebarOpen || isZenMode) ? 'closed' : ''}`}>
+        <div style={{ marginBottom: '1rem' }}><GlobalSearch tasks={tasks} folders={folders} onResultClick={handleSearchResultClick} /></div>
+        <div className="sidebar-section-header"><span>My Folders</span><button onClick={createNewFolder} title="New Folder"><PiPlus /></button></div>
         <ul className="nav-list">
-          <li className={"nav-item " + (activeView === 'dashboard' ? 'active' : '')} onClick={() => setActiveView('dashboard')}>
-            <PiTelevision style={{ marginRight: '8px', fontSize: '1.1rem' }} /> Dashboard
-          </li>
-
-          <li style={{ marginTop: '1rem' }}><button className="btn-add-folder" onClick={createNewFolder}><PiPlus style={{ verticalAlign: 'middle' }} /> New Folder</button></li>
           {folders.map(folder => (
             <li key={folder.id} className="folder-wrapper">
               <div className="folder-header" onContextMenu={(e) => handleContextMenu(e, folder.id)}>
-                <span className="folder-arrow" onClick={() => toggleFolderInSidebar(folder.id)}>
-                  <PiCaretDown style={{ transform: folder.isOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }} />
-                </span>
-                <span className="folder-icon" onClick={() => toggleFolderInSidebar(folder.id)}><PiFolder size={18} /></span>
+                <span className="folder-arrow" onClick={() => toggleFolderInSidebar(folder.id)}><PiCaretDown style={{ transform: folder.isOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }} /></span>
+                <span className="folder-icon" onClick={() => toggleFolderInSidebar(folder.id)}><PiFolder color={folder.color} size={18} /></span>
                 <span className="folder-name" onClick={() => toggleFolderInSidebar(folder.id)}>{folder.name}</span>
               </div>
               {folder.isOpen && (
                 <ul className="folder-content">
                   {folder.notes.map(note => (
-                    <li key={note.id} className={"note-item " + (activeNote?.id === note.id ? 'active' : '')} onClick={() => { setActiveNote(note); setActiveView('note') }} onContextMenu={(e) => handleNoteContextMenu(e, note.id, folder.id)}>
-                      {note.type === 'canvas' ? <PiSquaresFour style={{ marginRight: '6px' }} /> : <PiNotePencil style={{ marginRight: '6px' }} />} {note.title}
+                    <li
+                      key={note.id}
+                      className={`note-item ${activeNote?.id === note.id && activeView === 'note' ? 'active' : ''}`}
+                      onClick={() => { setActiveNote(note); setActiveView('note') }}
+                      onContextMenu={(e) => handleNoteContextMenu(e, note.id, folder.id)}
+                    >
+                      {note.icon ? <span style={{ marginRight: '6px' }}>{note.icon}</span> : <PiNotePencil style={{ marginRight: '6px' }} />} {note.title}
                     </li>
                   ))}
                 </ul>)}
             </li>
           ))}
         </ul>
-        <div className="theme-wrapper">
-          <span className="theme-label">Dark Mode</span>
-          <button className={`toggle-switch ${isDarkMode ? 'active' : ''}`} onClick={toggleTheme}><div className="toggle-handle">{isDarkMode ? <PiMoon size={12} color="#333" style={{ marginTop: '3px', marginLeft: '3px' }} /> : <PiSun size={12} color="#F59E0B" style={{ marginTop: '3px', marginLeft: '3px' }} />}</div></button>
-        </div>
+
+        {allTags.length > 0 && (
+          <>
+            <div className="sidebar-section-header"><span>Categories</span></div>
+            <ul className="nav-list">
+              {allTags.map(tag => (
+                <li key={tag} className={`nav-item ${activeView === 'tag' && activeTag === tag ? 'active' : ''}`} onClick={() => { setActiveTag(tag); setActiveView('tag'); }}>
+                  <PiTag style={{ marginRight: '8px', fontSize: '1.1rem' }} /> {tag}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </aside>
-      <main className="editor-area">
-        <header className="editor-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
-            {!isSidebarOpen && <button className="btn-graph" onClick={toggleSidebar}><PiList /></button>}
-            <GlobalSearch tasks={tasks} folders={folders} onResultClick={handleSearchResultClick} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span className="breadcrumb">
-              {activeView === 'dashboard' ? 'Dashboard' : (
-                <>
-                  <span style={{ opacity: 0.6 }}>{activeFolder?.name || 'Folder'}</span> <span style={{ margin: '0 6px', opacity: 0.4 }}>/</span> <span>{activeNote?.title}</span>
-                </>
-              )}
-            </span>
-          </div>
-        </header>
+
+      {/* --- MAIN CONTENT AREA --- */}
+      <main className="editor-area" onClick={() => !isZenMode && setIsSidebarOpen(false)}>
+        {!isZenMode && (
+          <header className="editor-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
+              {activeView === 'note' && (<button className="btn-graph" onClick={(e) => { e.stopPropagation(); setIsSidebarOpen(!isSidebarOpen); }} title="Toggle Sidebar"><PiList /></button>)}
+              <span className="breadcrumb">
+                {activeView === 'dashboard' ? 'Dashboard' : activeView === 'tag' ? `Category: ${activeTag}` : (
+                  activeNote ? (<><span style={{ opacity: 0.6 }}>{activeFolder?.name || 'Folder'}</span> <span style={{ margin: '0 6px', opacity: 0.4 }}>/</span> <span>{activeNote?.title}</span></>) : ('My Notes')
+                )}
+              </span>
+            </div>
+          </header>
+        )}
+
+        {activeView === 'note' && activeNote && (
+          <button className="btn-zen-toggle" onClick={(e) => { e.stopPropagation(); setIsZenMode(!isZenMode); }} title={isZenMode ? "Exit Zen Mode" : "Enter Zen Mode"}>
+            {isZenMode ? <PiCornersIn size={22} /> : <PiCornersOut size={22} />}
+          </button>
+        )}
 
         {activeView === 'dashboard' ? (
           <div className="dashboard-view">
-            <div className="dashboard-title">
-              <h1>Tasks & Deadlines</h1>
-            </div>
+            <div className="dashboard-title"><h1>Tasks & Deadlines</h1></div>
 
             <div className="goals-section">
               <div className="goals-header">
@@ -626,9 +629,25 @@ function App() {
                 <span style={{ flex: 1 }} />
                 <span className="goals-progress-label">Progress: {progress}%</span>
               </div>
-              <div className="goals-progress-bar-bg">
-                <div className="goals-progress-bar" style={{ width: progress + '%' }} />
+              <div className="goals-progress-bar-bg"><div className="goals-progress-bar" style={{ width: progress + '%' }} /></div>
+
+              {/* --- UI HABIT TRACKER (RIWAYAT KONSISTENSI DARI DB) --- */}
+              <div className="habit-tracker-container">
+                <div className="tracker-header">
+                  <span>{goalMode === 'daily' ? 'Riwayat 28 Hari Terakhir' : 'Riwayat 4 Minggu Terakhir'}</span>
+                </div>
+
+                {goalMode === 'daily' ? (
+                  <div className="heatmap-grid">
+                    {renderHeatmap()}
+                  </div>
+                ) : (
+                  <div className="weekly-cards-grid">
+                    {renderWeeklyCards()}
+                  </div>
+                )}
               </div>
+
               <form className="goals-add-form" onSubmit={handleAddGoal}>
                 <input className="goals-input" placeholder={goalMode === 'daily' ? 'Add daily goal...' : 'Add weekly goal...'} value={goalInput} onChange={e => setGoalInput(e.target.value)} />
                 <button className="goals-add-btn" type="submit">Add</button>
@@ -637,8 +656,7 @@ function App() {
                 {filteredGoals.length === 0 && <li className="goals-empty">No goals yet.</li>}
                 {filteredGoals.map((g) => (
                   <li key={g.id} className={g.done ? 'goals-item done' : 'goals-item'} onClick={() => toggleGoalDone(g.id, g.done)}>
-                    <span className="goals-check">{g.done ? '✔' : ''}</span>
-                    <span className="goals-text">{g.text}</span>
+                    <span className="goals-check">{g.done ? '✔' : ''}</span><span className="goals-text">{g.text}</span>
                   </li>
                 ))}
               </ul>
@@ -654,9 +672,7 @@ function App() {
               <DragDropContext onDragEnd={onDragEnd}>
                 <div className="category-views">
                   {folders.map(folder => {
-                    const folderTasks = tasks
-                      .filter(t => t.category === folder.name)
-                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                    const folderTasks = tasks.filter(t => t.category === folder.name).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                     const isCategoryOpen = openCategories[folder.id] ?? true;
                     return (
                       <div key={folder.id} className="category-group">
@@ -668,40 +684,21 @@ function App() {
                           <StrictModeDroppable droppableId={folder.id}>
                             {(provided) => (
                               <div ref={provided.innerRef} {...provided.droppableProps}>
-                                <div className="task-list-header">
-                                  <span>Meeting / Task Name</span>
-                                  <span>Date</span>
-                                </div>
+                                <div className="task-list-header"><span>Meeting / Task Name</span><span>Date</span></div>
                                 {folderTasks.map((task, index) => (
                                   <Draggable key={task.id} draggableId={task.id} index={index}>
                                     {(provided, snapshot) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        className={`task-row ${task.status === 'Done' ? 'completed' : ''} ${snapshot.isDragging ? 'dragging' : ''}`}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          className="custom-checkbox"
-                                          checked={task.status === 'Done'}
-                                          onChange={() => toggleTaskStatus(task.id, task.status)}
-                                        />
+                                      <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className={`task-row ${task.status === 'Done' ? 'completed' : ''} ${snapshot.isDragging ? 'dragging' : ''}`}>
+                                        <input type="checkbox" className="custom-checkbox" checked={task.status === 'Done'} onChange={() => toggleTaskStatus(task.id, task.status)} />
                                         <span className="task-title" title={task.title}>{task.title}</span>
-                                        <span className="task-date" style={{ textAlign: 'right' }}>
-                                          {new Date(task.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                        </span>
-                                        <button onClick={() => deleteTask(task.id)} className="btn-icon-danger">
-                                          <PiTrash />
-                                        </button>
+                                        <span className="task-date" style={{ textAlign: 'right' }}>{new Date(task.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                        <button onClick={() => deleteTask(task.id)} className="btn-icon-danger"><PiTrash /></button>
                                       </div>
                                     )}
                                   </Draggable>
                                 ))}
                                 {provided.placeholder}
-                                <button className="btn-inline-add" onClick={(e) => { e.stopPropagation(); openTaskModal(folder.name, ''); }}>
-                                  <PiPlus style={{ marginRight: '4px' }} /> New Task
-                                </button>
+                                <button className="btn-inline-add" onClick={(e) => { e.stopPropagation(); openTaskModal(folder.name, ''); }}><PiPlus style={{ marginRight: '4px' }} /> New Task</button>
                               </div>
                             )}
                           </StrictModeDroppable>
@@ -709,9 +706,7 @@ function App() {
                       </div>
                     );
                   })}
-                  <button className="btn-inline-add" style={{ marginTop: '2rem' }} onClick={createNewFolder}>
-                    <PiPlus style={{ marginRight: '4px' }} /> Add new category
-                  </button>
+                  <button className="btn-inline-add" style={{ marginTop: '2rem' }} onClick={createNewFolder}><PiPlus style={{ marginRight: '4px' }} /> Add new category</button>
                 </div>
               </DragDropContext>
             )}
@@ -737,47 +732,25 @@ function App() {
                     const isToday = day === today.getDate() && calendarMonth === today.getMonth() && calendarYear === today.getFullYear();
 
                     const onDropEvent = async (e: React.DragEvent<HTMLDivElement>) => {
-                      e.preventDefault();
-                      const taskId = e.dataTransfer.getData('text/event-id');
+                      e.preventDefault(); const taskId = e.dataTransfer.getData('text/event-id');
                       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, date: dateStr } : t));
                       await supabase.from('tasks').update({ date: dateStr }).eq('id', taskId);
                     };
                     const onDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
-
                     const isImportant = dayTasks.some(t => /urgent|penting/i.test(t.title));
                     return (
-                      <div
-                        key={day}
-                        className={`cal-day ${isToday ? 'today' : ''} ${isImportant ? 'important-day' : ''}`}
-                        onClick={e => openEventPopover(e, dateStr)}
-                        style={{ position: 'relative', cursor: 'pointer' }}
-                        onDrop={onDropEvent}
-                        onDragOver={onDragOver}
-                        data-date-str={dateStr}
-                      >
-                        <div className="day-header">
-                          <span className="day-num">{day}</span>
-                        </div>
+                      <div key={day} className={`cal-day ${isToday ? 'today' : ''} ${isImportant ? 'important-day' : ''}`} onClick={e => openEventPopover(e, dateStr)} style={{ position: 'relative', cursor: 'pointer' }} onDrop={onDropEvent} onDragOver={onDragOver} data-date-str={dateStr}>
+                        <div className="day-header"><span className="day-num">{day}</span></div>
                         {dayTasks.length > 0 && (() => {
-                          const SHOW_PILLS = 2;
-                          const shownPills = dayTasks.slice(0, SHOW_PILLS);
-                          const restDots = dayTasks.slice(SHOW_PILLS);
+                          const SHOW_PILLS = 2; const shownPills = dayTasks.slice(0, SHOW_PILLS); const restDots = dayTasks.slice(SHOW_PILLS);
                           return (
                             <div className="cal-events-wrap">
                               {shownPills.map((t: Task) => {
                                 const folderColor = folders.find(f => f.name === t.category)?.color || '#6366f1';
                                 const statusIcon = t.status === 'Done' ? '✓' : t.status === 'In Progress' ? '◑' : '';
                                 return (
-                                  <div
-                                    key={t.id}
-                                    className={`cal-event-pill ${t.status === 'Done' ? 'pill-done' : ''}`}
-                                    draggable
-                                    onDragStart={e => e.dataTransfer.setData('text/event-id', t.id)}
-                                    style={{ background: folderColor }}
-                                    title={`${t.title} [${t.status}]`}
-                                  >
-                                    {statusIcon && <span className="pill-status-icon">{statusIcon}</span>}
-                                    <span className="pill-text">{t.title}</span>
+                                  <div key={t.id} className={`cal-event-pill ${t.status === 'Done' ? 'pill-done' : ''}`} draggable onDragStart={e => e.dataTransfer.setData('text/event-id', t.id)} style={{ background: folderColor }} title={`${t.title} [${t.status}]`}>
+                                    {statusIcon && <span className="pill-status-icon">{statusIcon}</span>}<span className="pill-text">{t.title}</span>
                                   </div>
                                 );
                               })}
@@ -786,16 +759,7 @@ function App() {
                                   {restDots.map((t: Task) => {
                                     const folderColor = folders.find(f => f.name === t.category)?.color || '#6366f1';
                                     const borderColor = t.status === 'Done' ? '#22c55e' : t.status === 'In Progress' ? '#f59e0b' : 'transparent';
-                                    return (
-                                      <span
-                                        key={t.id}
-                                        className="cal-dot"
-                                        draggable
-                                        onDragStart={e => e.dataTransfer.setData('text/event-id', t.id)}
-                                        style={{ background: folderColor, boxShadow: `0 0 0 2px ${borderColor}` }}
-                                        title={`${t.title} [${t.status}]`}
-                                      />
-                                    );
+                                    return (<span key={t.id} className="cal-dot" draggable onDragStart={e => e.dataTransfer.setData('text/event-id', t.id)} style={{ background: folderColor, boxShadow: `0 0 0 2px ${borderColor}` }} title={`${t.title} [${t.status}]`} />);
                                   })}
                                   <span className="cal-dots-more">+{restDots.length}</span>
                                 </div>
@@ -806,56 +770,31 @@ function App() {
                       </div>
                     )
                   })}
-
                   {eventPopover.isOpen && (() => {
                     const dateTasks = tasks.filter(t => t.date === eventPopover.date);
-                    const dateLabel = new Date(eventPopover.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const isToday = eventPopover.date === todayStr;
+                    const isToday = eventPopover.date === new Date().toISOString().split('T')[0];
                     return (
                       <>
                         <div className="day-panel-backdrop" onClick={closeEventPopover} />
                         <div className="day-panel">
                           <div className="day-panel-header">
                             <div className="day-panel-header-left">
-                              <div className="day-panel-date-num">
-                                {new Date(eventPopover.date + 'T00:00:00').getDate()}
-                              </div>
+                              <div className="day-panel-date-num">{new Date(eventPopover.date + 'T00:00:00').getDate()}</div>
                               <div className="day-panel-date-info">
-                                <span className="day-panel-month">
-                                  {new Date(eventPopover.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                                </span>
-                                <span className="day-panel-weekday">
-                                  {new Date(eventPopover.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' })}
-                                  {isToday && <span className="day-panel-today-badge">Today</span>}
-                                </span>
+                                <span className="day-panel-month">{new Date(eventPopover.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                                <span className="day-panel-weekday">{new Date(eventPopover.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' })}{isToday && <span className="day-panel-today-badge">Today</span>}</span>
                               </div>
                             </div>
                             <button className="day-panel-close" onClick={closeEventPopover}><PiX size={20} /></button>
                           </div>
-
                           <div className="day-panel-summary">
-                            <span className="day-panel-summary-item" style={{ '--sc': '#6366f1' } as React.CSSProperties}>
-                              <span className="dps-num">{dateTasks.filter(t => t.status === 'To Do').length}</span>
-                              <span className="dps-label">To Do</span>
-                            </span>
-                            <span className="day-panel-summary-item" style={{ '--sc': '#f59e0b' } as React.CSSProperties}>
-                              <span className="dps-num">{dateTasks.filter(t => t.status === 'In Progress').length}</span>
-                              <span className="dps-label">In Progress</span>
-                            </span>
-                            <span className="day-panel-summary-item" style={{ '--sc': '#22c55e' } as React.CSSProperties}>
-                              <span className="dps-num">{dateTasks.filter(t => t.status === 'Done').length}</span>
-                              <span className="dps-label">Done</span>
-                            </span>
+                            <span className="day-panel-summary-item" style={{ '--sc': '#6366f1' } as React.CSSProperties}><span className="dps-num">{dateTasks.filter(t => t.status === 'To Do').length}</span><span className="dps-label">To Do</span></span>
+                            <span className="day-panel-summary-item" style={{ '--sc': '#f59e0b' } as React.CSSProperties}><span className="dps-num">{dateTasks.filter(t => t.status === 'In Progress').length}</span><span className="dps-label">In Progress</span></span>
+                            <span className="day-panel-summary-item" style={{ '--sc': '#22c55e' } as React.CSSProperties}><span className="dps-num">{dateTasks.filter(t => t.status === 'Done').length}</span><span className="dps-label">Done</span></span>
                           </div>
-
                           <div className="day-panel-body">
                             {dateTasks.length === 0 ? (
-                              <div className="day-panel-empty">
-                                <span style={{ fontSize: '2.5rem' }}>📭</span>
-                                <span>No tasks for this day</span>
-                                <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>Click below to add one!</span>
-                              </div>
+                              <div className="day-panel-empty"><span style={{ fontSize: '2.5rem' }}>📭</span><span>No tasks for this day</span><span style={{ fontSize: '0.8rem', opacity: 0.6 }}>Click below to add one!</span></div>
                             ) : (
                               dateTasks.map(task => {
                                 const folderColor = folders.find(f => f.name === task.category)?.color || '#6366f1';
@@ -866,35 +805,15 @@ function App() {
                                     <div className="dpec-bar" style={{ background: folderColor }} />
                                     <div className="dpec-body">
                                       <div className="dpec-top">
-                                        <span className="dpec-status-badge" style={{ background: statusColor + '22', color: statusColor, borderColor: statusColor + '44' }}>
-                                          {statusIcon} {task.status}
-                                        </span>
-                                        <span className="dpec-category" style={{ background: folderColor + '22', color: folderColor }}>
-                                          {task.category}
-                                        </span>
+                                        <span className="dpec-status-badge" style={{ background: statusColor + '22', color: statusColor, borderColor: statusColor + '44' }}>{statusIcon} {task.status}</span>
+                                        <span className="dpec-category" style={{ background: folderColor + '22', color: folderColor }}>{task.category}</span>
                                       </div>
-                                      <div className={`dpec-title ${task.status === 'Done' ? 'dpec-done' : ''}`}>
-                                        {task.title}
-                                      </div>
+                                      <div className={`dpec-title ${task.status === 'Done' ? 'dpec-done' : ''}`}>{task.title}</div>
                                       <div className="dpec-actions">
-                                        <button className="dpec-btn dpec-btn-check"
-                                          onClick={() => toggleTaskStatus(task.id, task.status)}
-                                          title="Cycle status"
-                                          style={{ borderColor: statusColor + '66', color: statusColor }}>
-                                          {statusIcon} Cycle
-                                        </button>
-                                        <button className="dpec-btn dpec-btn-edit"
-                                          onClick={() => { setEditEventModal({ isOpen: true, event: task }); closeEventPopover(); }}>
-                                          <PiPencilSimple size={13} /> Edit
-                                        </button>
-                                        <button className="dpec-btn dpec-btn-detail"
-                                          onClick={() => { setOpenEventDetail({ isOpen: true, event: task }); closeEventPopover(); }}>
-                                          <PiNotePencil size={13} /> Notes
-                                        </button>
-                                        <button className="dpec-btn dpec-btn-del"
-                                          onClick={() => { setDeleteTaskModal({ isOpen: true, taskId: task.id, taskTitle: task.title }); closeEventPopover(); }}>
-                                          <PiTrash size={13} />
-                                        </button>
+                                        <button className="dpec-btn dpec-btn-check" onClick={() => toggleTaskStatus(task.id, task.status)} style={{ borderColor: statusColor + '66', color: statusColor }}>{statusIcon} Cycle</button>
+                                        <button className="dpec-btn dpec-btn-edit" onClick={() => { setEditEventModal({ isOpen: true, event: task }); closeEventPopover(); }}><PiPencilSimple size={13} /> Edit</button>
+                                        <button className="dpec-btn dpec-btn-detail" onClick={() => { setOpenEventDetail({ isOpen: true, event: task }); closeEventPopover(); }}><PiNotePencil size={13} /> Notes</button>
+                                        <button className="dpec-btn dpec-btn-del" onClick={() => { setDeleteTaskModal({ isOpen: true, taskId: task.id, taskTitle: task.title }); closeEventPopover(); }}><PiTrash size={13} /></button>
                                       </div>
                                     </div>
                                   </div>
@@ -902,18 +821,13 @@ function App() {
                               })
                             )}
                           </div>
-
                           <div className="day-panel-footer">
-                            <button className="day-panel-add-btn"
-                              onClick={() => { openQuickAdd({ currentTarget: null } as any, eventPopover.date); closeEventPopover(); }}>
-                              <PiPlus size={16} /> Add Task to This Day
-                            </button>
+                            <button className="day-panel-add-btn" onClick={() => { openQuickAdd({ currentTarget: null } as any, eventPopover.date); closeEventPopover(); }}><PiPlus size={16} /> Add Task to This Day</button>
                           </div>
                         </div>
                       </>
                     );
                   })()}
-
                 </div>
               </div>
             )}
@@ -925,99 +839,210 @@ function App() {
                 { key: 'Done', label: 'Done', color: '#22c55e', bg: 'rgba(34,197,94,0.08)', icon: '●' },
               ];
               return (
-                <DragDropContext onDragEnd={async (result) => {
-                  const { source, destination, draggableId } = result;
-                  if (!destination) return;
-                  if (destination.droppableId === source.droppableId && destination.index === source.index) return;
-                  const newStatus = destination.droppableId;
-                  setTasks(prev => prev.map(t => t.id === draggableId ? { ...t, status: newStatus } : t));
-                  await supabase.from('tasks').update({ status: newStatus }).eq('id', draggableId);
-                }}>
-                  <div className="kanban-board">
-                    {statusColumns.map(col => {
-                      const colTasks = tasks.filter(t => t.status === col.key);
-                      return (
-                        <div key={col.key} className="kanban-column" style={{ '--kanban-color': col.color, '--kanban-bg': col.bg } as React.CSSProperties}>
-                          <div className="kanban-column-header">
-                            <span className="kanban-status-dot" style={{ color: col.color }}>{col.icon}</span>
-                            <span className="kanban-column-title">{col.label}</span>
-                            <span className="kanban-count">{colTasks.length}</span>
-                          </div>
-                          <StrictModeDroppable droppableId={col.key}>
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.droppableProps}
-                                className={`kanban-cards ${snapshot.isDraggingOver ? 'drag-over' : ''}`}
-                              >
-                                {colTasks.map((task, idx) => {
-                                  const folderColor = folders.find(f => f.name === task.category)?.color || '#6366f1';
-                                  return (
-                                    <Draggable key={task.id} draggableId={task.id} index={idx}>
-                                      {(provided, snap) => (
-                                        <div
-                                          ref={provided.innerRef}
-                                          {...provided.draggableProps}
-                                          {...provided.dragHandleProps}
-                                          className={`kanban-card ${snap.isDragging ? 'dragging' : ''}`}
-                                        >
-                                          <div className="kanban-card-top">
-                                            <span className="kanban-card-category-dot" style={{ background: folderColor }} />
-                                            <span className="kanban-card-category">{task.category}</span>
-                                            <button className="btn-icon-danger" style={{ marginLeft: 'auto', padding: '2px 4px' }} onClick={() => deleteTask(task.id)}><PiTrash size={14} /></button>
-                                          </div>
-                                          <div className="kanban-card-title">{task.title}</div>
-                                          <div className="kanban-card-footer">
-                                            <span className="kanban-card-date"><PiCalendar size={12} style={{ marginRight: 4 }} />{new Date(task.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                            <button className="kanban-card-edit-btn" onClick={() => setEditEventModal({ isOpen: true, event: task })}><PiPencilSimple size={12} /></button>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </Draggable>
-                                  );
-                                })}
-                                {provided.placeholder}
-                                <button className="kanban-add-btn" onClick={() => openTaskModal('', '')}>
-                                  <PiPlus size={14} style={{ marginRight: 4 }} /> Add Task
-                                </button>
-                              </div>
-                            )}
-                          </StrictModeDroppable>
-                        </div>
-                      );
-                    })}
+                <div className="kanban-wrapper">
+                  <div className="kanban-top-bar">
+                    <div className="kanban-year-nav">
+                      <button onClick={() => setCalendarYear(y => y - 1)}><PiCaretLeft size={16} /></button>
+                      <span>{calendarYear}</span>
+                      <button onClick={() => setCalendarYear(y => y + 1)}><PiCaretRight size={16} /></button>
+                    </div>
+                    <div className="kanban-month-list">
+                      <button className={`kanban-filter-pill ${kanbanFilter === 'all' ? 'active' : ''}`} onClick={() => setKanbanFilter('all')}>All Time</button>
+                      {monthNames.map((m, i) => (
+                        <button key={m} className={`kanban-filter-pill ${kanbanFilter === i.toString() ? 'active' : ''}`} onClick={() => setKanbanFilter(i.toString())}>{m}</button>
+                      ))}
+                    </div>
                   </div>
-                </DragDropContext>
+
+                  <DragDropContext onDragEnd={async (result) => {
+                    const { source, destination, draggableId } = result;
+                    if (!destination) return;
+                    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+                    const newStatus = destination.droppableId;
+                    setTasks(prev => prev.map(t => t.id === draggableId ? { ...t, status: newStatus } : t));
+                    await supabase.from('tasks').update({ status: newStatus }).eq('id', draggableId);
+                  }}>
+                    <div className="kanban-board">
+                      {statusColumns.map(col => {
+                        const colTasks = tasks.filter(t => {
+                          if (t.status !== col.key) return false;
+                          if (kanbanFilter === 'all') return true;
+                          const taskDate = new Date(t.date);
+                          return taskDate.getFullYear() === calendarYear && taskDate.getMonth().toString() === kanbanFilter;
+                        });
+
+                        return (
+                          <div key={col.key} className="kanban-column" style={{ '--kanban-color': col.color, '--kanban-bg': col.bg } as React.CSSProperties}>
+                            <div className="kanban-column-header">
+                              <span className="kanban-status-dot" style={{ color: col.color }}>{col.icon}</span>
+                              <span className="kanban-column-title">{col.label}</span>
+                              <span className="kanban-count">{colTasks.length}</span>
+                            </div>
+                            <StrictModeDroppable droppableId={col.key}>
+                              {(provided, snapshot) => (
+                                <div ref={provided.innerRef} {...provided.droppableProps} className={`kanban-cards ${snapshot.isDraggingOver ? 'drag-over' : ''}`}>
+                                  {colTasks.map((task, idx) => {
+                                    const folderColor = folders.find(f => f.name === task.category)?.color || '#6366f1';
+                                    return (
+                                      <Draggable key={task.id} draggableId={task.id} index={idx}>
+                                        {(provided, snap) => (
+                                          <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className={`kanban-card ${snap.isDragging ? 'dragging' : ''}`}>
+                                            <div className="kanban-card-top">
+                                              <span className="kanban-card-category-dot" style={{ background: folderColor }} />
+                                              <span className="kanban-card-category">{task.category}</span>
+                                              <button className="btn-icon-danger" style={{ marginLeft: 'auto', padding: '2px 4px' }} onClick={() => deleteTask(task.id)}><PiTrash size={14} /></button>
+                                            </div>
+                                            <div className="kanban-card-title">{task.title}</div>
+                                            <div className="kanban-card-footer">
+                                              <span className="kanban-card-date"><PiCalendar size={12} style={{ marginRight: 4 }} />{new Date(task.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                              <button className="kanban-card-edit-btn" onClick={() => setEditEventModal({ isOpen: true, event: task })}><PiPencilSimple size={12} /></button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    );
+                                  })}
+                                  {provided.placeholder}
+                                  <button className="kanban-add-btn" onClick={() => openTaskModal('', '')}><PiPlus size={14} style={{ marginRight: 4 }} /> Add Task</button>
+                                </div>
+                              )}
+                            </StrictModeDroppable>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </DragDropContext>
+                </div>
               );
             })()}
           </div>
+        ) : activeView === 'tag' ? (
+          <div className="dashboard-view" style={{ paddingTop: '1rem' }}>
+            <div className="dashboard-title">
+              <h1><PiTag style={{ verticalAlign: 'middle', marginRight: '10px', color: 'var(--accent)' }} /> Label: {activeTag}</h1>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Menampilkan semua catatan yang memiliki label ini.</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
+              {folders.flatMap(f => f.notes).filter(n => n.tags?.includes(activeTag)).map(note => {
+                const folder = folders.find(f => f.notes.some(n => n.id === note.id));
+                return (
+                  <div key={note.id} className="kanban-card" onClick={() => { setActiveNote(note); setActiveView('note'); }} style={{ cursor: 'pointer' }}>
+                    <div className="kanban-card-top">
+                      <span className="kanban-card-category-dot" style={{ background: folder?.color || '#6366f1' }} />
+                      <span className="kanban-card-category">{folder?.name}</span>
+                    </div>
+                    <div className="kanban-card-title">{note.title}</div>
+                    <div className="kanban-card-footer">
+                      <span className="kanban-card-date"><PiNotePencil size={12} style={{ marginRight: 4 }} /> Notes</span>
+                    </div>
+                  </div>
+                )
+              })}
+              {folders.flatMap(f => f.notes).filter(n => n.tags?.includes(activeTag)).length === 0 && (
+                <div style={{ color: 'var(--text-secondary)' }}>Tidak ada catatan dengan label ini.</div>
+              )}
+            </div>
+          </div>
+        ) : activeView === 'note' && !activeNote ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80%', color: 'var(--text-secondary)' }}>
+            <PiFolder size={64} style={{ marginBottom: '1rem', opacity: 0.3 }} />
+            <h2 style={{ marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Pilih atau Buat Catatan</h2>
+            <p style={{ opacity: 0.8 }}>Silakan pilih catatan dari panel di sebelah kiri untuk mulai mengedit.</p>
+          </div>
         ) : (
           <div className="document-container">
-            <div className="document-cover" style={{ background: getCoverGradient(activeNote?.id || '0') }}>
+            <div
+              className="document-cover"
+              style={{
+                background: activeNote?.cover || getCoverGradient(activeNote?.id || '0'),
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              }}
+            >
               <div className="cover-actions">
-                <button className="btn-cover-action"><PiImage style={{ marginRight: '6px' }} /> Change Cover</button>
+                <button className="btn-cover-action" onClick={(e) => { e.stopPropagation(); setShowCoverPicker(!showCoverPicker); setShowIconPicker(false); }}>
+                  <PiImage style={{ marginRight: '6px', fontSize: '1.1rem' }} /> Change Cover
+                </button>
+
+                {showCoverPicker && (
+                  <div className="picker-popover" style={{ top: '100%', right: 0, marginTop: '8px', width: '280px' }} onClick={e => e.stopPropagation()}>
+                    <div className="cover-grid">
+                      {COVER_LIST.map((cover, i) => (
+                        <button key={i} className="cover-btn" style={{ background: cover }} onClick={() => handleSelectCover(cover)} />
+                      ))}
+                    </div>
+                    <div className="cover-url-input">
+                      <input id="cover-url-input" className="form-control" placeholder="Paste Image URL..." style={{ padding: '6px', fontSize: '0.85rem' }} />
+                      <button className="btn-primary" style={{ padding: '6px 12px' }} onClick={() => {
+                        const val = (document.getElementById('cover-url-input') as HTMLInputElement).value;
+                        if (val) handleSelectCover(`url(${val})`);
+                      }}>Set</button>
+                    </div>
+                    <button className="btn-cancel" style={{ width: '100%', marginTop: '8px', padding: '6px' }} onClick={() => handleSelectCover('')}>Remove Cover</button>
+                  </div>
+                )}
               </div>
             </div>
 
             <article className="document-content">
-              <div className="document-icon-wrapper">
-                <span className="document-icon-large">{activeNote?.type === 'canvas' ? <PiSquaresFour /> : <PiNotePencil />}</span>
-                <button className="btn-icon-action"><PiSmiley /></button>
+              <div className="document-icon-wrapper" style={{ position: 'relative' }}>
+                <span
+                  className="document-icon-large"
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => { e.stopPropagation(); setShowIconPicker(!showIconPicker); setShowCoverPicker(false); }}
+                  title="Change Icon"
+                >
+                  {activeNote?.icon ? activeNote.icon : <PiNotePencil />}
+                </span>
+
+                {showIconPicker && (
+                  <div className="picker-popover" style={{ top: '100%', left: 0, marginTop: '8px' }} onClick={e => e.stopPropagation()}>
+                    <div className="emoji-grid">
+                      {EMOJI_LIST.map(emoji => (
+                        <button key={emoji} className="emoji-btn" onClick={() => handleSelectIcon(emoji)}>
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                    <button className="btn-cancel" style={{ width: '100%', marginTop: '8px', padding: '6px' }} onClick={() => handleSelectIcon('')}>Remove Icon</button>
+                  </div>
+                )}
               </div>
 
-              <input className="document-title-input" value={activeNote?.title || ''} onChange={onNoteTitleChange} placeholder="Untitled" />
+              <input
+                className="document-title-input"
+                value={activeNote?.title || ''}
+                onChange={onNoteTitleChange}
+                placeholder="Untitled Document"
+              />
 
               <div className="document-meta">
-                <span className="meta-item"><PiCalendar style={{ marginRight: '4px' }} /> Today</span>
-                <span className="meta-item"><PiTag style={{ marginRight: '4px' }} /> Add Tag</span>
+                <div className="meta-group">
+                  <PiCalendar size={18} opacity={0.6} />
+                  <span>{new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                </div>
+
+                <span style={{ opacity: 0.3 }}>|</span>
+
+                <div className="meta-group">
+                  <PiTag size={18} opacity={0.6} />
+                  {activeNote?.tags?.map(tag => (
+                    <span key={tag} className="meta-tag">
+                      {tag}
+                      <button onClick={(e) => { e.stopPropagation(); handleRemoveTagFromNote(tag); }} title="Hapus Label">
+                        <PiX size={14} />
+                      </button>
+                    </span>
+                  ))}
+                  <span className="meta-tag-add" onClick={handleAddTagToNote}>
+                    <PiPlus style={{ marginRight: '4px' }} /> Add Tag
+                  </span>
+                </div>
               </div>
 
               <div className="editor-wrapper">
-                {activeNote?.type === 'canvas' ? (
-                  <div className="canvas-placeholder"><PiSquaresFour size={48} /><h3>Canvas Mode</h3><p>Draw diagrams and create visuals here.</p></div>
-                ) : (
-                  <EditorWrapper key={activeNote?.id} note={activeNote!} isDarkMode={isDarkMode} />
-                )}
+                <EditorWrapper key={activeNote?.id} note={activeNote!} isDarkMode={isDarkMode} />
               </div>
             </article>
           </div>
@@ -1065,14 +1090,7 @@ function App() {
                 <label>Date</label>
                 <DatePicker
                   selected={new Date(editEventModal.event.date)}
-                  onChange={(date: Date | null) => {
-                    if (date) {
-                      setEditEventModal(prev => ({
-                        ...prev,
-                        event: prev.event ? { ...prev.event, date: date.toISOString().split('T')[0] } : null
-                      }));
-                    }
-                  }}
+                  onChange={(date: Date | null) => { if (date) { setEditEventModal(prev => ({ ...prev, event: prev.event ? { ...prev.event, date: date.toISOString().split('T')[0] } : null })); } }}
                   dateFormat="yyyy-MM-dd"
                   customInput={<CustomDateInput />}
                 />
@@ -1105,16 +1123,7 @@ function App() {
               </div>
               <div className="form-group">
                 <label>Notes</label>
-                <textarea
-                  className="form-control"
-                  rows={5}
-                  placeholder="Write notes..."
-                  value={eventNotes[openEventDetail.event.id] || ''}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setEventNotes(prev => ({ ...prev, [openEventDetail.event!.id]: val }));
-                  }}
-                />
+                <textarea className="form-control" rows={5} placeholder="Write notes..." value={eventNotes[openEventDetail.event.id] || ''} onChange={e => { const val = e.target.value; setEventNotes(prev => ({ ...prev, [openEventDetail.event!.id]: val })); }} />
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Autosaved</span>
               </div>
               <div className="modal-actions">
@@ -1127,29 +1136,16 @@ function App() {
 
       {contextMenu && (
         <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
-          <div className="context-item" onClick={() => handleAddNote(contextMenu.folderId)}>
-            <PiFilePlus style={{ marginRight: '8px' }} /> Add Note
-          </div>
-          <div className="context-item" onClick={() => handleAddCanvas(contextMenu.folderId)}>
-            <PiSquaresFour style={{ marginRight: '8px' }} /> Add Canvas
-          </div>
-          <div className="context-item" onClick={() => openRenameModal(contextMenu.folderId)}>
-            <PiPencilSimple style={{ marginRight: '8px' }} /> Edit
-          </div>
-          <div className="context-item delete" onClick={() => openDeleteModal(contextMenu.folderId)}>
-            <PiTrash style={{ marginRight: '8px' }} /> Delete
-          </div>
+          <div className="context-item" onClick={() => handleAddNote(contextMenu.folderId)}><PiFilePlus style={{ marginRight: '8px' }} /> Add Note</div>
+          <div className="context-item" onClick={() => openRenameModal(contextMenu.folderId)}><PiPencilSimple style={{ marginRight: '8px' }} /> Edit</div>
+          <div className="context-item delete" onClick={() => openDeleteModal(contextMenu.folderId)}><PiTrash style={{ marginRight: '8px' }} /> Delete</div>
         </div>
       )}
 
       {noteContextMenu && (
         <div className="context-menu" style={{ top: noteContextMenu.y, left: noteContextMenu.x }} onClick={(e) => e.stopPropagation()}>
-          <div className="context-item" onClick={() => setRenameNoteModal({ isOpen: true, folderId: noteContextMenu.folderId, noteId: noteContextMenu.noteId, currentTitle: folders.find(f => f.id === noteContextMenu.folderId)?.notes.find(n => n.id === noteContextMenu.noteId)?.title || '' })}>
-            <PiPencilSimple style={{ marginRight: '8px' }} /> Rename
-          </div>
-          <div className="context-item delete" onClick={() => setDeleteNoteModal({ isOpen: true, folderId: noteContextMenu.folderId, noteId: noteContextMenu.noteId, noteTitle: folders.find(f => f.id === noteContextMenu.folderId)?.notes.find(n => n.id === noteContextMenu.noteId)?.title || '' })}>
-            <PiTrash style={{ marginRight: '8px' }} /> Delete
-          </div>
+          <div className="context-item" onClick={() => setRenameNoteModal({ isOpen: true, folderId: noteContextMenu.folderId, noteId: noteContextMenu.noteId, currentTitle: folders.find(f => f.id === noteContextMenu.folderId)?.notes.find(n => n.id === noteContextMenu.noteId)?.title || '' })}><PiPencilSimple style={{ marginRight: '8px' }} /> Rename</div>
+          <div className="context-item delete" onClick={() => setDeleteNoteModal({ isOpen: true, folderId: noteContextMenu.folderId, noteId: noteContextMenu.noteId, noteTitle: folders.find(f => f.id === noteContextMenu.folderId)?.notes.find(n => n.id === noteContextMenu.noteId)?.title || '' })}><PiTrash style={{ marginRight: '8px' }} /> Delete</div>
         </div>
       )}
 
@@ -1158,18 +1154,9 @@ function App() {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>Edit Folder</h3>
             <form onSubmit={handleRenameFolder}>
-              <div className="form-group">
-                <label>Folder Name</label>
-                <input name="newName" className="form-control" autoFocus required defaultValue={renameModal.currentName} />
-              </div>
-              <div className="form-group">
-                <label>Folder Color</label>
-                <input name="folderColor" type="color" className="form-control" defaultValue={renameModal.currentColor} style={{ width: 48, height: 32, padding: 0, border: 'none', background: 'none' }} />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' })}>Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
+              <div className="form-group"><label>Folder Name</label><input name="newName" className="form-control" autoFocus required defaultValue={renameModal.currentName} /></div>
+              <div className="form-group"><label>Folder Color</label><input name="folderColor" type="color" className="form-control" defaultValue={renameModal.currentColor} style={{ width: 48, height: 32, padding: 0, border: 'none', background: 'none' }} /></div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' })}>Cancel</button><button type="submit" className="btn-primary">Save</button></div>
             </form>
           </div>
         </div>
@@ -1180,14 +1167,8 @@ function App() {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>Edit Note</h3>
             <form onSubmit={handleRenameNoteSubmit}>
-              <div className="form-group">
-                <label>Note Name</label>
-                <input name="newNoteTitle" className="form-control" autoFocus required defaultValue={renameNoteModal.currentTitle} />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setRenameNoteModal({ isOpen: false, folderId: '', noteId: '', currentTitle: '' })}>Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
+              <div className="form-group"><label>Note Name</label><input name="newNoteTitle" className="form-control" autoFocus required defaultValue={renameNoteModal.currentTitle} /></div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setRenameNoteModal({ isOpen: false, folderId: '', noteId: '', currentTitle: '' })}>Cancel</button><button type="submit" className="btn-primary">Save</button></div>
             </form>
           </div>
         </div>
@@ -1197,14 +1178,8 @@ function App() {
         <div className="modal-overlay" onClick={() => setDeleteModal({ isOpen: false, folderId: '', folderName: '' })}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>Delete Folder?</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5' }}>
-              Are you sure you want to delete the folder <strong>{deleteModal.folderName}</strong>? <br />
-              All tasks and notes within it will be permanently deleted.
-            </p>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setDeleteModal({ isOpen: false, folderId: '', folderName: '' })}>Cancel</button>
-              <button className="btn-danger" onClick={confirmDeleteFolder}>Delete</button>
-            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5' }}>Are you sure you want to delete the folder <strong>{deleteModal.folderName}</strong>? <br />All tasks and notes within it will be permanently deleted.</p>
+            <div className="modal-actions"><button className="btn-cancel" onClick={() => setDeleteModal({ isOpen: false, folderId: '', folderName: '' })}>Cancel</button><button className="btn-danger" onClick={confirmDeleteFolder}>Delete</button></div>
           </div>
         </div>
       )}
@@ -1213,14 +1188,8 @@ function App() {
         <div className="modal-overlay" onClick={() => setDeleteNoteModal({ isOpen: false, folderId: '', noteId: '', noteTitle: '' })}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>Delete Note?</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5' }}>
-              Are you sure you want to delete the note <strong>{deleteNoteModal.noteTitle}</strong>? <br />
-              This action cannot be undone.
-            </p>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setDeleteNoteModal({ isOpen: false, folderId: '', noteId: '', noteTitle: '' })}>Cancel</button>
-              <button className="btn-danger" onClick={confirmDeleteNote}>Delete</button>
-            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5' }}>Are you sure you want to delete the note <strong>{deleteNoteModal.noteTitle}</strong>? <br />This action cannot be undone.</p>
+            <div className="modal-actions"><button className="btn-cancel" onClick={() => setDeleteNoteModal({ isOpen: false, folderId: '', noteId: '', noteTitle: '' })}>Cancel</button><button className="btn-danger" onClick={confirmDeleteNote}>Delete</button></div>
           </div>
         </div>
       )}
@@ -1229,13 +1198,8 @@ function App() {
         <div className="modal-overlay" onClick={() => setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' })}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>Delete Task?</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5' }}>
-              Are you sure you want to delete the task <strong>{deleteTaskModal.taskTitle}</strong>?
-            </p>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' })}>Cancel</button>
-              <button className="btn-danger" onClick={confirmDeleteTask}>Delete</button>
-            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5' }}>Are you sure you want to delete the task <strong>{deleteTaskModal.taskTitle}</strong>?</p>
+            <div className="modal-actions"><button className="btn-cancel" onClick={() => setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' })}>Cancel</button><button className="btn-danger" onClick={confirmDeleteTask}>Delete</button></div>
           </div>
         </div>
       )}
@@ -1243,24 +1207,11 @@ function App() {
       {inputModal.isOpen && (
         <div className="modal-overlay" onClick={() => setInputModal({ ...inputModal, isOpen: false })}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>
-              {inputModal.mode === 'create_folder' ? 'New Folder' : inputModal.mode === 'create_note' ? 'New Note' : 'New Canvas'}
-            </h3>
+            <h3 style={{ marginTop: 0 }}>{inputModal.mode === 'create_folder' ? 'New Folder' : 'New Note'}</h3>
             <form onSubmit={handleInputSubmit}>
-              <div className="form-group">
-                <label>Name</label>
-                <input name="inputValue" className="form-control" autoFocus required placeholder={inputModal.mode === 'create_folder' ? 'Folder Name...' : 'Title...'} />
-              </div>
-              {inputModal.mode === 'create_folder' && (
-                <div className="form-group">
-                  <label>Folder Color</label>
-                  <input name="inputColor" type="color" className="form-control" defaultValue="#6366f1" style={{ width: 48, height: 32, padding: 0, border: 'none', background: 'none' }} />
-                </div>
-              )}
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setInputModal({ ...inputModal, isOpen: false })}>Cancel</button>
-                <button type="submit" className="btn-primary">Create</button>
-              </div>
+              <div className="form-group"><label>Name</label><input name="inputValue" className="form-control" autoFocus required placeholder={inputModal.mode === 'create_folder' ? 'Folder Name...' : 'Title...'} /></div>
+              {inputModal.mode === 'create_folder' && (<div className="form-group"><label>Folder Color</label><input name="inputColor" type="color" className="form-control" defaultValue="#6366f1" style={{ width: 48, height: 32, padding: 0, border: 'none', background: 'none' }} /></div>)}
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setInputModal({ ...inputModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Create</button></div>
             </form>
           </div>
         </div>
@@ -1271,10 +1222,7 @@ function App() {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>Add New Task</h3>
             <form onSubmit={handleTaskSubmit}>
-              <div className="form-group">
-                <label>Task Name</label>
-                <input name="title" className="form-control" autoFocus required placeholder="Example: Thesis Chapter 2" />
-              </div>
+              <div className="form-group"><label>Task Name</label><input name="title" className="form-control" autoFocus required placeholder="Example: Thesis Chapter 2" /></div>
               <div className="form-group">
                 <label>Category</label>
                 <div className="select-wrapper">
@@ -1286,21 +1234,9 @@ function App() {
               </div>
               <div className="form-group">
                 <label>Date</label>
-                <DatePicker
-                  selected={new Date(taskModal.defaultDate)}
-                  onChange={(date: Date | null) => {
-                    if (date) {
-                      setTaskModal(prev => ({ ...prev, defaultDate: date.toISOString().split('T')[0] }));
-                    }
-                  }}
-                  dateFormat="yyyy-MM-dd"
-                  customInput={<CustomDateInput />}
-                />
+                <DatePicker selected={new Date(taskModal.defaultDate)} onChange={(date: Date | null) => { if (date) { setTaskModal(prev => ({ ...prev, defaultDate: date.toISOString().split('T')[0] })); } }} dateFormat="yyyy-MM-dd" customInput={<CustomDateInput />} />
               </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setTaskModal({ ...taskModal, isOpen: false })}>Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setTaskModal({ ...taskModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Save</button></div>
             </form>
           </div>
         </div>
@@ -1309,9 +1245,7 @@ function App() {
       <div className="toast-container">
         {toasts.map(toast => (
           <div key={toast.id} className={`toast ${toast.type}`}>
-            <span className="toast-icon">
-              {toast.type === 'success' ? <PiCheckCircle size={28} color="#22c55e" /> : <PiWarningCircle size={28} color="#ef4444" />}
-            </span>
+            <span className="toast-icon">{toast.type === 'success' ? <PiCheckCircle size={28} color="#22c55e" /> : <PiWarningCircle size={28} color="#ef4444" />}</span>
             <span>{toast.message}</span>
             <button className="toast-close" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}><PiX /></button>
           </div>
