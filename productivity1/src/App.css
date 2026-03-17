@@ -1330,6 +1330,7 @@
   white-space: nowrap;
   transition: transform 0.12s, opacity 0.12s;
   width: 100%;
+  /* Memastikan kotak mengambil lebar penuh tapi tidak meluber */
   box-sizing: border-box;
 }
 
