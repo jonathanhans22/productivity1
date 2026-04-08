@@ -1,7 +1,8 @@
 import { useState, useEffect, forwardRef, useRef } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { useCreateBlockNote } from '@blocknote/react'
+import { filterSuggestionItems } from "@blocknote/core"
+import { useCreateBlockNote, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from '@hello-pangea/dnd'
 
@@ -31,6 +32,48 @@ const COVER_LIST = [
   'linear-gradient(to right, #43e97b 0%, #38f9d7 100%)',
   '#1e2029', '#333645'
 ];
+
+const getCustomSlashMenuItems = (editor: any) => {
+  const colors = [
+    { name: "Red", value: "red" },
+    { name: "Blue", value: "blue" },
+    { name: "Green", value: "green" },
+    { name: "Yellow", value: "yellow" },
+    { name: "Purple", value: "purple" },
+    { name: "Pink", value: "pink" },
+    { name: "Orange", value: "orange" },
+    { name: "Brown", value: "brown" },
+    { name: "Gray", value: "gray" },
+  ];
+
+  const colorItems = colors.map((color) => ({
+    title: `${color.name} Background`,
+    onItemClick: () => {
+      const currentBlock = editor.getTextCursorPosition()?.block;
+      if (currentBlock) {
+        editor.updateBlock(currentBlock, {
+          props: { ...currentBlock.props, backgroundColor: color.value },
+        });
+      }
+    },
+    aliases: [color.name.toLowerCase(), "background", "bg", "stabillo", "warna"],
+    group: "Background Colors",
+    icon: (
+      <div
+        style={{
+          width: "18px",
+          height: "18px",
+          borderRadius: "4px",
+          backgroundColor: color.value,
+          border: "1px solid #e0e0e0"
+        }}
+      />
+    ),
+    subtext: `Ubah latar belakang menjadi ${color.name.toLowerCase()}`,
+  }));
+
+  return [...getDefaultReactSlashMenuItems(editor), ...colorItems];
+};
 
 function EditorWrapper({ note, isDarkMode, onContentChange }: { note: Note, isDarkMode: boolean, onContentChange: (noteId: string, content: string) => void }) {
   const initialContent = note.content && typeof note.content === 'string'
@@ -80,7 +123,6 @@ function EditorWrapper({ note, isDarkMode, onContentChange }: { note: Note, isDa
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     const cursor = editor.getTextCursorPosition();
 
-    // Tambahkan kondisi 'heading' agar blok H1/H2/H3 ikut dipertahankan
     if (
       cursor &&
       cursor.block &&
@@ -94,18 +136,15 @@ function EditorWrapper({ note, isDarkMode, onContentChange }: { note: Note, isDa
         e.preventDefault();
         e.stopPropagation();
 
-        // Pecah teks berdasarkan baris baru (enter)
         const lines = plainText.split(/\r?\n/).filter(line => line.trim() !== '');
 
         if (lines.length > 0) {
-          // 1. Sisipkan baris pertama langsung di posisi kursor sebagai teks biasa
           document.execCommand('insertText', false, lines[0]);
 
-          // 2. Jika ada baris berikutnya, buatkan blok baru di bawahnya dengan tipe yang sama
           if (lines.length > 1) {
             const newBlocks: any[] = lines.slice(1).map(line => ({
               type: cursor.block.type,
-              props: cursor.block.props, // Tambahkan ini agar level heading (H1/H2/H3) tidak hilang
+              props: cursor.block.props,
               content: line
             }));
 
@@ -126,7 +165,15 @@ function EditorWrapper({ note, isDarkMode, onContentChange }: { note: Note, isDa
         editor={editor}
         theme={isDarkMode ? 'dark' : 'light'}
         onChange={handleEditorChange}
-      />
+        slashMenu={false}
+      >
+        <SuggestionMenuController
+          triggerCharacter={"/"}
+          getItems={async (query) =>
+            filterSuggestionItems(getCustomSlashMenuItems(editor), query)
+          }
+        />
+      </BlockNoteView>
     </div>
   );
 }
