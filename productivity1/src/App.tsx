@@ -1,7 +1,7 @@
 import { useState, useEffect, forwardRef, useRef } from 'react'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { filterSuggestionItems } from "@blocknote/core"
+import { filterSuggestionItems } from "@blocknote/core/extensions"
 import { useCreateBlockNote, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from '@hello-pangea/dnd'
