@@ -3400,3 +3400,475 @@ select.form-control {
   background: var(--border-strong);
   margin: 0 6px;
 }
+
+/* ============================================
+   PRIORITY MATRIX
+   ============================================ */
+
+.priority-container {
+  padding: 2rem 2.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* --- Header --- */
+.priority-header {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  margin-bottom: 1.8rem;
+  flex-wrap: wrap;
+}
+
+.priority-header-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent), #a855f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px var(--accent-glow, #fbbf2444);
+}
+
+.priority-header h1 {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.priority-header p {
+  color: var(--text-secondary);
+  margin: 3px 0 0;
+  font-size: 0.92rem;
+}
+
+.priority-stats {
+  display: flex;
+  gap: 1rem;
+  margin-left: auto;
+}
+
+.pstat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 8px 20px;
+  min-width: 80px;
+}
+
+.pstat-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.pstat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+/* --- Unassigned Task Pool --- */
+.unassigned-pool {
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1.8rem;
+  backdrop-filter: blur(16px);
+}
+
+.pool-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.9rem;
+}
+
+.pool-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 2px 9px;
+}
+
+.pool-hint {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.pool-scroll {
+  display: flex;
+  flex-wrap: nowrap;          /* must NOT wrap — lib needs single-row for horizontal DnD */
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding-bottom: 4px;        /* space for scrollbar */
+  scroll-snap-type: x proximity;
+}
+
+.pool-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.pool-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pool-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+/* Each unassigned task chip */
+.pool-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 8px 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  flex-shrink: 0;
+  max-width: 320px;
+}
+
+.pool-chip:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+}
+
+.chip-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chip-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.chip-cat {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 1px;
+}
+
+.chip-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.chip-assign-btn {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+  letter-spacing: 0.03em;
+}
+
+.chip-assign-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.15);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+}
+
+/* --- Empty state --- */
+.priority-empty {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  opacity: 0.6;
+}
+
+.priority-empty h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  opacity: 0.9;
+}
+
+.priority-empty p {
+  font-size: 0.875rem;
+  max-width: 340px;
+  margin: 0;
+}
+
+/* --- 2x2 Eisenhower Grid --- */
+.eisenhower-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, minmax(260px, auto));
+  gap: 1.2rem;
+}
+
+.quadrant-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.quadrant-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.quadrant-header {
+  padding: 1rem 1.2rem 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: color-mix(in srgb, var(--bg-main) 20%, transparent);
+}
+
+.q-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.q-labels {
+  flex: 1;
+  min-width: 0;
+}
+
+.quadrant-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.q-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.q-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 3px 10px;
+  flex-shrink: 0;
+}
+
+.q-description {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0;
+  padding: 0.4rem 1.2rem 0.6rem;
+  opacity: 0.8;
+  font-style: italic;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.quadrant-content {
+  flex: 1;
+  padding: 0.75rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.priority-task-item {
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.priority-task-item:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.task-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.task-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-name {
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-cat {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.task-unassign-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 3px 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.priority-task-item:hover .task-unassign-btn {
+  opacity: 1;
+}
+
+.task-unassign-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  border-color: #fca5a522;
+}
+
+.empty-quadrant {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 80px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  opacity: 0.45;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .eisenhower-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .priority-stats {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* --- Drag & Drop --- */
+
+/* Drag handle icon */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+  opacity: 0.35;
+  cursor: grab;
+  flex-shrink: 0;
+  padding: 2px 3px;
+  border-radius: 4px;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.priority-task-item:hover .drag-handle,
+.pool-chip:hover .pool-drag-handle {
+  opacity: 0.7;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Card while being dragged */
+.priority-task-item.dragging {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  opacity: 0.97;
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  /* NO transform here — the library handles positioning */
+}
+
+.pool-chip.dragging {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  opacity: 0.97;
+  border-color: var(--border-strong);
+  /* NO transform here — the library handles positioning */
+}
+
+/* Quadrant content drop target highlight */
+.quadrant-content.drag-over-quadrant {
+  background: color-mix(in srgb, var(--quad-accent, var(--accent)) 8%, transparent);
+  border-radius: 0 0 15px 15px;
+  outline: 2px dashed color-mix(in srgb, var(--quad-accent, var(--accent)) 50%, transparent);
+  outline-offset: -4px;
+}
+
+/* Pool drop target highlight */
+.pool-scroll.drag-over-pool {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 10px;
+  outline: 2px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: -3px;
+  min-height: 56px;
+}
+
+/* Pool empty hint */
+.pool-empty-hint {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-style: italic;
+  opacity: 0.55;
+  padding: 6px 4px;
+  align-self: center;
+}

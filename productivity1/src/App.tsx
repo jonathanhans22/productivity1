@@ -5,9 +5,9 @@ import { filterSuggestionItems } from "@blocknote/core/extensions"
 import { useCreateBlockNote, SuggestionMenuController, getDefaultReactSlashMenuItems } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from '@hello-pangea/dnd'
-
+import PriorityView from './components/PriorityView';
 import {
-  PiTelevision, PiFolder, PiNotePencil, PiStack, PiCalendar, PiMoon, PiSun,
+  PiTelevision, PiFolder, PiNotePencil, PiStack, PiCalendar, PiMoon, PiSun, PiTarget,
   PiPlus, PiList, PiPencilSimple, PiTrash, PiCaretDown, PiFilePlus, PiImage,
   PiTag, PiCheckCircle, PiWarningCircle, PiX, PiCaretLeft, PiCaretRight,
   PiCornersOut, PiCornersIn, PiBookOpen, PiBookOpenText
@@ -22,7 +22,7 @@ import logoSaya from './assets/logobaru.png'
 
 type Note = { id: string; title: string; type: 'note'; content?: any; tags?: string[]; icon?: string; cover?: string; }
 type Folder = { id: string; name: string; isOpen: boolean; notes: Note[]; color: string }
-type Task = { id: string; title: string; date: string; category: string; status: string }
+type Task = { id: string; title: string; date: string; category: string; status: string; priority_level?: string | null }
 type SearchResult = { id: string; title: string; type: 'task' | 'note'; folderId?: string; }
 
 type GoalHistory = { id: string; date: string; mode: 'daily' | 'weekly'; progress: number; }
@@ -297,7 +297,7 @@ function App() {
   const filteredGoals = goals.filter(g => g.mode === goalMode);
   const progress = filteredGoals.length === 0 ? 0 : Math.round(filteredGoals.filter(g => g.done).length / filteredGoals.length * 100);
 
-  const [activeView, setActiveView] = useState<'dashboard' | 'note' | 'tag'>('dashboard')
+  const [activeView, setActiveView] = useState<'dashboard' | 'note' | 'tag' | 'priority'>('dashboard');
   const [activeTag, setActiveTag] = useState<string>('')
   const [dashboardTab, setDashboardTab] = useState<'category' | 'calendar' | 'status'>('category')
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({})
@@ -450,6 +450,11 @@ function App() {
     const { error } = await supabase.from('tasks').delete().eq('id', taskId);
     if (!error) { setTasks(prev => prev.filter(t => t.id !== taskId)); setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' }); showToast('Tugas berhasil dihapus') }
   }
+
+  const assignPriority = async (taskId: string, level: string | null) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority_level: level } : t));
+    await supabase.from('tasks').update({ priority_level: level }).eq('id', taskId);
+  };
 
   const confirmDeleteFolder = async () => {
     const { folderId, folderName } = deleteModal
@@ -691,16 +696,41 @@ function App() {
       {!isZenMode && (
         <nav className="sidebar-rail" onClick={() => setIsSidebarOpen(false)}>
           <div className="rail-avatar" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
-            <img
-              src={logoSaya}
-              alt="Profile"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            <img src={logoSaya} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
-          <button className={`rail-icon ${activeView === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setActiveView('dashboard'); setDashboardTab('category'); setIsSidebarOpen(false); }} title="Dashboard"><PiTelevision /></button>
-          <button className={`rail-icon ${activeView === 'note' ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setActiveView('note'); setActiveNote(null); setIsSidebarOpen(true); }} title="My Folders & Notes"><PiFolder /></button>
+
+          {/* Tombol Dashboard */}
+          <button
+            className={`rail-icon ${activeView === 'dashboard' ? 'active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setActiveView('dashboard'); setDashboardTab('category'); setIsSidebarOpen(false); }}
+            title="Dashboard"
+          >
+            <PiTelevision />
+          </button>
+
+          {/* Tombol Matriks Prioritas (TAMBAHKAN DI SINI) */}
+          <button
+            className={`rail-icon ${activeView === 'priority' ? 'active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setActiveView('priority'); setIsSidebarOpen(false); }}
+            title="Priority Matrix"
+          >
+            <PiTarget />
+          </button>
+
+          {/* Tombol Folder & Notes */}
+          <button
+            className={`rail-icon ${activeView === 'note' ? 'active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setActiveView('note'); setActiveNote(null); setIsSidebarOpen(true); }}
+            title="My Folders & Notes"
+          >
+            <PiFolder />
+          </button>
+
+          {/* Sisanya tetap sama... */}
           <div style={{ marginTop: 'auto' }}>
-            <button className="rail-icon" onClick={(e) => { e.stopPropagation(); toggleTheme(); }} title="Toggle Theme">{isDarkMode ? <PiSun /> : <PiMoon />}</button>
+            <button className="rail-icon" onClick={(e) => { e.stopPropagation(); toggleTheme(); }} title="Toggle Theme">
+              {isDarkMode ? <PiSun /> : <PiMoon />}
+            </button>
           </div>
         </nav>
       )}
@@ -1090,6 +1120,8 @@ function App() {
               )}
             </div>
           </div>
+        ) : activeView === 'priority' ? (
+          <PriorityView tasks={tasks} onAssign={assignPriority} />
         ) : activeView === 'note' && !activeNote ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80%', color: 'var(--text-secondary)' }}>
             <PiFolder size={64} style={{ marginBottom: '1rem', opacity: 0.3 }} />
