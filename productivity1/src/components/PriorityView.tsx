@@ -18,6 +18,7 @@ interface Task {
 interface Props {
   tasks: Task[];
   onAssign: (taskId: string, level: string | null) => void;
+  onDragEnd?: (result: DropResult) => void;
 }
 
 const quadrants = [
@@ -61,12 +62,17 @@ const quadrants = [
 
 const UNASSIGNED_ID = 'unassigned';
 
-const PriorityView = ({ tasks, onAssign }: Props) => {
+const PriorityView = ({ tasks, onAssign, onDragEnd }: Props) => {
   const activeTasks = tasks.filter(t => t.status !== 'Done');
   const unassigned = activeTasks.filter(t => !t.priority_level);
   const assigned = activeTasks.filter(t => !!t.priority_level);
 
   const handleDragEnd = (result: DropResult) => {
+    if (onDragEnd) {
+      onDragEnd(result);
+      return;
+    }
+
     const { draggableId, destination } = result;
     if (!destination) return;
 
@@ -185,7 +191,7 @@ const PriorityView = ({ tasks, onAssign }: Props) => {
                             <span className="chip-cat">{task.category}</span>
                           </div>
 
-                          {/* Quick-assign buttons (still available as fallback) */}
+                          {/* Quick-assign buttons */}
                           <div className="chip-btns">
                             {quadrants.map(q => (
                               <button

@@ -455,7 +455,42 @@ function App() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority_level: level } : t));
     await supabase.from('tasks').update({ priority_level: level }).eq('id', taskId);
   };
+  // TAMBAHKAN FUNGSI INI:
+  const onPriorityDragEnd = async (result: DropResult) => {
+    const { source, destination, draggableId } = result;
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
+    const taskToMove = tasks.find(t => t.id === draggableId);
+    if (!taskToMove) return;
+
+    const destId = destination.droppableId;
+    const newLevel = destId === 'unassigned' ? null : destId;
+
+    // Lakukan pemindahan urutan di local state
+    const newTasks = tasks.filter(t => t.id !== draggableId);
+    const activeTasks = newTasks.filter(t => t.status !== 'Done');
+    const destTasks = activeTasks.filter(t => newLevel === null ? !t.priority_level : t.priority_level === newLevel);
+
+    let insertionIndex = newTasks.length;
+    if (destination.index === 0) {
+      const firstTask = destTasks[0];
+      insertionIndex = firstTask ? newTasks.indexOf(firstTask) : newTasks.length;
+    } else {
+      const taskBefore = destTasks[destination.index - 1];
+      if (taskBefore) {
+        insertionIndex = newTasks.indexOf(taskBefore) + 1;
+      }
+    }
+
+    newTasks.splice(insertionIndex, 0, { ...taskToMove, priority_level: newLevel });
+    setTasks(newTasks);
+
+    // Update database jika quadrant-nya berubah
+    if (taskToMove.priority_level !== newLevel) {
+      await supabase.from('tasks').update({ priority_level: newLevel }).eq('id', taskToMove.id);
+    }
+  };
   const confirmDeleteFolder = async () => {
     const { folderId, folderName } = deleteModal
     const { error } = await supabase.from('folders').delete().eq('id', folderId);
@@ -1121,7 +1156,7 @@ function App() {
             </div>
           </div>
         ) : activeView === 'priority' ? (
-          <PriorityView tasks={tasks} onAssign={assignPriority} />
+          <PriorityView tasks={tasks} onAssign={assignPriority} onDragEnd={onPriorityDragEnd} />
         ) : activeView === 'note' && !activeNote ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80%', color: 'var(--text-secondary)' }}>
             <PiFolder size={64} style={{ marginBottom: '1rem', opacity: 0.3 }} />
