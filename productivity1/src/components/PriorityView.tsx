@@ -158,7 +158,7 @@ const PriorityView = ({ tasks, onAssign, onDragEnd }: Props) => {
               <span className="pool-hint">— drag into a quadrant below, or use the Q1–Q4 buttons</span>
             </div>
 
-            <StrictModeDroppable droppableId={UNASSIGNED_ID} direction="horizontal">
+            <StrictModeDroppable droppableId={UNASSIGNED_ID} >
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}

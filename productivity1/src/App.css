@@ -3516,17 +3516,19 @@ select.form-control {
 
 .pool-scroll {
   display: flex;
-  flex-wrap: nowrap;
-  /* must NOT wrap — lib needs single-row for horizontal DnD */
+  flex-wrap: wrap;
+  /* Diubah agar item yang penuh turun ke bawah */
   gap: 0.65rem;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  /* space for scrollbar */
-  scroll-snap-type: x proximity;
+  max-height: 260px;
+  /* Batas tinggi, agar kalau banyak bisa di-scroll ke bawah */
+  overflow-y: auto;
+  /* Menambahkan scroll vertikal */
+  padding: 4px;
 }
 
+/* Mempercantik scrollbar khusus untuk area unassigned pool */
 .pool-scroll::-webkit-scrollbar {
-  height: 4px;
+  width: 6px;
 }
 
 .pool-scroll::-webkit-scrollbar-track {
