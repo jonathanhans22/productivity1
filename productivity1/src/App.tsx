@@ -234,7 +234,7 @@ function App() {
   }
 
   const fetchData = async () => {
-    const { data: tasksData } = await supabase.from('tasks').select('*');
+    const { data: tasksData, error: taskError } = await supabase.from('tasks').select('*');
     if (tasksData) setTasks(tasksData as Task[]);
 
     const { data: foldersData } = await supabase.from('folders').select(`*, notes (*)`).order('created_at', { ascending: true });
@@ -434,7 +434,8 @@ function App() {
     const formData = new FormData(e.currentTarget);
     if (!editEventModal.event) return;
     const updatedData = { title: formData.get('title') as string, category: formData.get('category') as string, date: editEventModal.event.date, status: formData.get('status') as string, };
-    const { data } = await supabase.from('tasks').update(updatedData).eq('id', editEventModal.event.id).select().single();
+    const { data, error } = await supabase.from('tasks').update(updatedData).eq('id', editEventModal.event.id).select().single();
+    if (error) { showToast('Gagal mengubah event', 'error'); return; }
     if (data) { setTasks(prev => prev.map(t => t.id === data.id ? (data as Task) : t)); setEditEventModal({ isOpen: false, event: null }); showToast('Event berhasil diubah'); }
   };
 
@@ -453,9 +454,13 @@ function App() {
 
   const assignPriority = async (taskId: string, level: string | null) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority_level: level } : t));
-    await supabase.from('tasks').update({ priority_level: level }).eq('id', taskId);
+    const { error } = await supabase.from('tasks').update({ priority_level: level }).eq('id', taskId);
+    if (error) {
+      console.error(error);
+      showToast('Gagal menyimpan prioritas. Pastikan kolom priority_level ada di tabel tasks.', 'error');
+    }
   };
-  // TAMBAHKAN FUNGSI INI:
+
   const onPriorityDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId } = result;
     if (!destination) return;
@@ -488,9 +493,14 @@ function App() {
 
     // Update database jika quadrant-nya berubah
     if (taskToMove.priority_level !== newLevel) {
-      await supabase.from('tasks').update({ priority_level: newLevel }).eq('id', taskToMove.id);
+      const { error } = await supabase.from('tasks').update({ priority_level: newLevel }).eq('id', taskToMove.id);
+      if (error) {
+        console.error(error);
+        showToast('Gagal menyimpan prioritas. Pastikan kolom priority_level ada di tabel tasks.', 'error');
+      }
     }
   };
+
   const confirmDeleteFolder = async () => {
     const { folderId, folderName } = deleteModal
     const { error } = await supabase.from('folders').delete().eq('id', folderId);
@@ -734,7 +744,6 @@ function App() {
             <img src={logoSaya} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
 
-          {/* Tombol Dashboard */}
           <button
             className={`rail-icon ${activeView === 'dashboard' ? 'active' : ''}`}
             onClick={(e) => { e.stopPropagation(); setActiveView('dashboard'); setDashboardTab('category'); setIsSidebarOpen(false); }}
@@ -743,7 +752,6 @@ function App() {
             <PiTelevision />
           </button>
 
-          {/* Tombol Matriks Prioritas (TAMBAHKAN DI SINI) */}
           <button
             className={`rail-icon ${activeView === 'priority' ? 'active' : ''}`}
             onClick={(e) => { e.stopPropagation(); setActiveView('priority'); setIsSidebarOpen(false); }}
@@ -752,7 +760,6 @@ function App() {
             <PiTarget />
           </button>
 
-          {/* Tombol Folder & Notes */}
           <button
             className={`rail-icon ${activeView === 'note' ? 'active' : ''}`}
             onClick={(e) => { e.stopPropagation(); setActiveView('note'); setActiveNote(null); setIsSidebarOpen(true); }}
@@ -761,7 +768,6 @@ function App() {
             <PiFolder />
           </button>
 
-          {/* Sisanya tetap sama... */}
           <div style={{ marginTop: 'auto' }}>
             <button className="rail-icon" onClick={(e) => { e.stopPropagation(); toggleTheme(); }} title="Toggle Theme">
               {isDarkMode ? <PiSun /> : <PiMoon />}
@@ -826,7 +832,6 @@ function App() {
           </header>
         )}
 
-        {/* Action Controls for Note View */}
         {activeView === 'note' && activeNote && (
           <>
             <button className={`btn-reading-toggle ${isReadingMode ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setIsReadingMode(!isReadingMode); }} title={isReadingMode ? "Keluar Mode Baca" : "Mode Baca (Read-Only)"}>
