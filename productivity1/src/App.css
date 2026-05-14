@@ -3881,3 +3881,541 @@ select.form-control {
   padding: 6px 4px;
   align-self: center;
 }
+/* =======================================================
+   FINANCE TRACKER UI
+   ======================================================= */
+.finance-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.finance-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.finance-card {
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.finance-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-float);
+}
+
+.finance-card-title {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.finance-card-amount {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.transaction-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--border-strong);
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.transaction-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  margin-bottom: 0.8rem;
+  transition: all 0.2s;
+}
+
+.transaction-row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.tx-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.tx-icon.income { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.tx-icon.expense { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+.tx-details { display: flex; flex-direction: column; gap: 4px; }
+.tx-desc { font-weight: 600; color: var(--text-primary); font-size: 1rem; }
+.tx-cat { font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-hover); padding: 2px 8px; border-radius: 4px; width: fit-content; }
+.tx-date { color: var(--text-secondary); font-size: 0.85rem; }
+.tx-amount { font-weight: 800; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.tx-amount.income { color: #10b981; }
+.tx-amount.expense { color: #ef4444; }
+/* =======================================================
+   PERBAIKAN UI: PANEL KANAN & KALENDER
+   ======================================================= */
+
+/* 1. Pemisahan Visual Sidebar Kanan */
+.right-panel {
+  background: var(--bg-main) !important;
+  border-left: 1px solid var(--border-strong) !important;
+  padding: 2rem 1.5rem !important;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] .right-panel {
+  background: #0f172a !important; /* Warna slate agar tidak terlalu hitam pekat */
+  border-left: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* 2. Pomodoro Widget Lebih Bersih */
+.pomodoro-widget {
+  background: var(--bg-hover) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 16px !important;
+  padding: 1.5rem !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.timer-display {
+  font-size: 3rem !important;
+  font-weight: 800 !important;
+  color: var(--text-primary) !important; /* Netralkan warnanya */
+  letter-spacing: 2px;
+  text-shadow: none !important;
+}
+
+/* 3. Tab Daily/Weekly Lebih Elegan */
+.goals-mode.active {
+  background: var(--bg-hover) !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 4. Daftar Tujuan (Goals) Lebih Berbentuk Kartu */
+.goals-item {
+  background: var(--bg-hover) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  margin-bottom: 8px !important;
+  transition: all 0.2s ease;
+}
+
+.goals-item:hover {
+  transform: translateX(4px);
+  border-color: var(--accent) !important;
+}
+
+.goals-check {
+  width: 20px !important;
+  height: 20px !important;
+  border-width: 2px !important;
+  border-color: var(--border-strong) !important;
+  color: var(--accent) !important;
+  background: transparent !important;
+  cursor: pointer;
+}
+
+.goals-item.done .goals-check {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: white !important;
+}
+
+/* Input Form Goals Lebih Terang */
+.goals-input {
+  background: var(--bg-main) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  font-size: 0.9rem !important;
+}
+
+.goals-input::placeholder {
+  opacity: 0.6;
+}
+
+/* 5. Warna Heatmap Disesuaikan ke Tema Hijau */
+.heatmap-box.level-1 { background: rgba(16, 185, 129, 0.2) !important; }
+.heatmap-box.level-2 { background: rgba(16, 185, 129, 0.5) !important; }
+.heatmap-box.level-3 { background: rgba(16, 185, 129, 0.8) !important; }
+.heatmap-box.level-4 { background: #10b981 !important; box-shadow: none !important; }
+
+/* 6. Perbaikan Kalender Tengah */
+.calendar-nav-bar {
+  background: var(--bg-hover);
+  padding: 8px 16px;
+  border-radius: 12px;
+  display: inline-flex;
+  margin: 0 auto 1.5rem auto !important;
+  border: 1px solid var(--border-subtle);
+}
+
+.calendar-nav-bar button.btn-timer {
+  border: none !important;
+  background: transparent !important;
+  font-weight: 700;
+  color: var(--text-secondary);
+  padding: 6px 12px !important;
+  border-radius: 6px !important;
+  box-shadow: none !important; /* Buang shadow default */
+}
+
+.calendar-nav-bar button.btn-timer:hover {
+  background: var(--border-subtle) !important;
+  color: var(--text-primary);
+}
+
+.cal-day.today .day-num {
+  background: var(--accent) !important; /* Ganti merah menjadi warna aksen tema */
+}
+
+.cal-event-pill {
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+/* =======================================================
+   FIX: UKURAN SIDEBAR KANAN (RIGHT PANEL)
+   ======================================================= */
+.right-panel {
+  width: 320px !important;       /* Mengunci lebar panel di 320px */
+  min-width: 320px !important;   /* Mencegah mengecil di layar sempit */
+  flex-shrink: 0 !important;     /* Mencegah panel ikut membesar/mengecil */
+  background: var(--bg-main) !important;
+  border-left: 1px solid var(--border-strong) !important;
+  padding: 1.5rem !important;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.05) !important;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+[data-theme='dark'] .right-panel {
+  background: #0f172a !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Memastikan elemen di dalamnya tidak membuang padding sia-sia */
+.right-panel .goals-section {
+  padding: 0 !important;
+  max-width: 100% !important;
+  margin-bottom: 0 !important;
+}
+/* =======================================================
+   PERBAIKAN TATA LETAK KALENDER
+   ======================================================= */
+
+.calendar-views {
+  display: flex;
+  flex-direction: column;
+  padding: 0 1rem; 
+}
+
+.calendar-nav-bar {
+  display: flex !important;
+  width: fit-content !important;
+  margin: 0 auto 2rem auto !important; 
+  background: var(--bg-glass) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 999px !important; 
+  padding: 6px 20px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important;
+}
+
+.calendar-header-row {
+  margin-bottom: 0.8rem !important;
+  text-transform: uppercase;
+  font-size: 0.75rem !important;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary) !important;
+  font-weight: 700 !important;
+}
+
+.calendar-grid {
+  background: var(--border-subtle) !important; 
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04) !important; 
+  overflow: hidden;
+}
+
+.cal-day {
+  background: var(--bg-main) !important;
+  min-height: 120px !important; 
+  padding: 10px !important;
+}
+
+.cal-day.empty {
+  background: var(--bg-hover) !important;
+  opacity: 0.5;
+}
+/* =======================================================
+   WIDGET SIDEBAR KANAN BARU
+   ======================================================= */
+
+.widget-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 1rem;
+}
+
+/* Finance Mini Widget */
+.finance-mini-widget {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.cashflow-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.cashflow-progress-bg {
+  height: 8px;
+  background: var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.cashflow-progress-fill {
+  height: 100%;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cashflow-footer {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+/* Upcoming Deadlines Widget */
+.upcoming-widget {
+  padding: 0 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.upcoming-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upcoming-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  transition: transform 0.2s;
+}
+
+.upcoming-item:hover {
+  transform: translateX(4px);
+  border-color: var(--accent);
+}
+
+.upcoming-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.upcoming-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.upcoming-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.upcoming-date {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.upcoming-empty {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem;
+}
+/* =======================================================
+   FINANCE DONUT CHART WIDGET
+   ======================================================= */
+
+.finance-mini-widget {
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.finance-donut-container {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Lingkaran Luar (Grafik) */
+.finance-donut {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: conic-gradient(var(--color) var(--spent), var(--bg-main) 0deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* Lingkaran Dalam (Bolongan Donat) */
+.finance-donut-inner {
+  width: 72px;
+  height: 72px;
+  background: var(--bg-hover);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.donut-percentage {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.donut-label {
+  font-size: 0.55rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* Rincian Teks di Sebelah Kanan Donat */
+.finance-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  flex: 1;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.bd-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.bd-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.bd-title {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+
+.bd-amount {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* Teks Saldo Sisa di Bawah */
+.finance-balance-footer {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  border-top: 1px dashed var(--border-strong);
+  padding-top: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+.finance-balance-footer strong {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  margin-left: 4px;
+}
