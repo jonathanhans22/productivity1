@@ -8,9 +8,8 @@ import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableP
 import PriorityView from './components/PriorityView';
 import {
   PiTelevision, PiFolder, PiNotePencil, PiStack, PiCalendar, PiMoon, PiSun, PiTarget,
-  PiPlus, PiList, PiPencilSimple, PiTrash, PiCaretDown, PiFilePlus, PiImage,
-  PiTag, PiCheckCircle, PiWarningCircle, PiX, PiCaretLeft, PiCaretRight,
-  PiCornersOut, PiCornersIn, PiBookOpen, PiBookOpenText, PiCommand, PiSidebarSimple,
+  PiPlus, PiList, PiPencilSimple, PiTrash, PiCaretDown, PiImage,
+  PiTag, PiCheckCircle, PiWarningCircle, PiX, PiCommand, PiSidebarSimple,
   PiWallet, PiArrowDownRight, PiArrowUpRight
 } from 'react-icons/pi'
 
@@ -138,9 +137,9 @@ export const StrictModeDroppable = ({ children, ...props }: DroppableProps) => {
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true)
-  const [isZenMode, setIsZenMode] = useState(false)
+  const [isZenMode] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(true)
-  const [isReadingMode, setIsReadingMode] = useState(false)
+  const [isReadingMode] = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
 
   const [folders, setFolders] = useState<Folder[]>([])
@@ -157,17 +156,13 @@ function App() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string } | null>(null)
   const [noteContextMenu, setNoteContextMenu] = useState<{ x: number; y: number; noteId: string; folderId: string } | null>(null)
 
-  const [renameModal, setRenameModal] = useState<{ isOpen: boolean; folderId: string; currentName: string; currentColor: string }>({ isOpen: false, folderId: '', currentName: '', currentColor: '' })
-  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; folderId: string; folderName: string }>({ isOpen: false, folderId: '', folderName: '' })
-  const [renameNoteModal, setRenameNoteModal] = useState<{ isOpen: boolean; folderId: string; noteId: string; currentTitle: string }>({ isOpen: false, folderId: '', noteId: '', currentTitle: '' })
-  const [deleteNoteModal, setDeleteNoteModal] = useState<{ isOpen: boolean; folderId: string; noteId: string; noteTitle: string }>({ isOpen: false, folderId: '', noteId: '', noteTitle: '' })
-  const [deleteTaskModal, setDeleteTaskModal] = useState<{ isOpen: boolean; taskId: string; taskTitle: string }>({ isOpen: false, taskId: '', taskTitle: '' })
+  // Removed unused: renameModal, setRenameModal, deleteModal, setDeleteModal, renameNoteModal, setRenameNoteModal, deleteNoteModal, setDeleteNoteModal, deleteTaskModal, setDeleteTaskModal
   const [inputModal, setInputModal] = useState<{ isOpen: boolean; mode: 'create_folder' | 'create_note'; folderId?: string }>({ isOpen: false, mode: 'create_folder' })
   const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' }[]>([])
   const [quickAddPopover, setQuickAddPopover] = useState<{ isOpen: boolean; target: HTMLElement | null; date: string }>({ isOpen: false, target: null, date: '' });
 
-  const [deleteGoalModal, setDeleteGoalModal] = useState<{ isOpen: boolean; goalId: string }>({ isOpen: false, goalId: '' });
-  const [addTagModal, setAddTagModal] = useState(false);
+  // Removed unused: deleteGoalModal, setDeleteGoalModal
+  // Removed unused: addTagModal, setAddTagModal
   const [financeModal, setFinanceModal] = useState<{ isOpen: boolean, type: 'income' | 'expense' }>({ isOpen: false, type: 'expense' });
 
   const [activeNote, setActiveNote] = useState<Note | null>(null)
@@ -176,9 +171,7 @@ function App() {
 
   const [taskModal, setTaskModal] = useState<{ isOpen: boolean; defaultCategory: string; defaultDate: string; }>({ isOpen: false, defaultCategory: '', defaultDate: new Date().toISOString().split('T')[0] })
   const [editEventModal, setEditEventModal] = useState<{ isOpen: boolean; event: Task | null }>({ isOpen: false, event: null });
-  const [eventNotes, setEventNotes] = useState<Record<string, string>>({});
-  const [openEventDetail, setOpenEventDetail] = useState<{ isOpen: boolean; event: Task | null }>({ isOpen: false, event: null });
-  const [eventPopover, setEventPopover] = useState<{ isOpen: boolean; target: HTMLElement | null; date: string }>({ isOpen: false, target: null, date: '' });
+  // Removed unused: eventNotes, setEventNotes, openEventDetail, setOpenEventDetail, eventPopover, setEventPopover
 
   useEffect(() => { fetchData(); }, []);
   useEffect(() => { document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light') }, [isDarkMode])
@@ -284,11 +277,8 @@ function App() {
     }
   };
 
-  const handleDeleteGoalClick = (e: React.MouseEvent, goalId: string) => { e.stopPropagation(); setDeleteGoalModal({ isOpen: true, goalId }); };
-  const confirmDeleteGoal = async () => {
-    const goalId = deleteGoalModal.goalId; setGoals(prev => prev.filter(g => g.id !== goalId));
-    await supabase.from('goals').delete().eq('id', goalId); setDeleteGoalModal({ isOpen: false, goalId: '' }); showToast('Target dihapus');
-  };
+  // Removed unused: handleDeleteGoalClick
+  // confirmDeleteGoal is unused, removed
   const toggleGoalDone = async (goalId: string, currentStatus: boolean) => {
     setGoals(goals.map(g => g.id === goalId ? { ...g, done: !currentStatus } : g));
     await supabase.from('goals').update({ is_done: !currentStatus }).eq('id', goalId);
@@ -363,10 +353,7 @@ function App() {
     await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
   }
 
-  const confirmDeleteTask = async () => {
-    const taskId = deleteTaskModal.taskId; const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-    if (!error) { setTasks(prev => prev.filter(t => t.id !== taskId)); setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' }); showToast('Tugas dihapus') }
-  }
+  // confirmDeleteTask is unused, removed
 
   const assignPriority = async (taskId: string, level: string | null) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority_level: level } : t));
@@ -389,45 +376,13 @@ function App() {
     if (taskToMove.priority_level !== newLevel) await supabase.from('tasks').update({ priority_level: newLevel }).eq('id', taskToMove.id);
   };
 
-  const confirmDeleteFolder = async () => {
-    const { folderId, folderName } = deleteModal; const { error } = await supabase.from('folders').delete().eq('id', folderId);
-    if (!error) { setFolders(prev => prev.filter(f => f.id !== folderId)); setTasks(prev => prev.filter(t => t.category !== folderName)); setDeleteModal({ isOpen: false, folderId: '', folderName: '' }); showToast('Folder dihapus'); }
-  }
+  // confirmDeleteFolder is unused, removed
 
-  const confirmDeleteNote = async () => {
-    const { folderId, noteId } = deleteNoteModal; const { error } = await supabase.from('notes').delete().eq('id', noteId);
-    if (!error) {
-      setFolders(prev => prev.map(f => { if (f.id === folderId) return { ...f, notes: f.notes.filter(n => n.id !== noteId) }; return f; }));
-      if (activeNote?.id === noteId) { setActiveNote(null); setActiveView('dashboard'); }
-      setDeleteNoteModal({ isOpen: false, folderId: '', noteId: '', noteTitle: '' }); showToast('Catatan dihapus');
-    }
-  }
+  // confirmDeleteNote is unused, removed
 
-  const handleRenameFolder = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); const formData = new FormData(e.currentTarget); const newName = formData.get('newName') as string; const newColor = formData.get('folderColor') as string;
-    const { folderId, currentName: oldName, currentColor } = renameModal;
-    if (!newName || (newName === oldName && newColor === currentColor)) { setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' }); return; }
-    const { error } = await supabase.from('folders').update({ name: newName, color: newColor }).eq('id', folderId);
-    if (!error) {
-      if (newName !== oldName) await supabase.from('tasks').update({ category: newName }).eq('category', oldName);
-      setFolders(prev => prev.map(f => (f.id === folderId ? { ...f, name: newName, color: newColor } : f)));
-      setTasks(prev => prev.map(t => (t.category === oldName ? { ...t, category: newName } : t)));
-      setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' }); showToast('Folder diubah');
-    }
-  }
+  // handleRenameFolder is unused, removed
 
-  const handleRenameNoteSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); const formData = new FormData(e.currentTarget); const newTitle = formData.get('newNoteTitle') as string;
-    const { folderId, noteId } = renameNoteModal;
-    if (newTitle) {
-      const { error } = await supabase.from('notes').update({ title: newTitle }).eq('id', noteId);
-      if (!error) {
-        setFolders(prev => prev.map(f => { if (f.id === folderId) return { ...f, notes: f.notes.map(n => n.id === noteId ? { ...n, title: newTitle } : n) }; return f; }));
-        if (activeNote?.id === noteId) setActiveNote(prev => prev ? { ...prev, title: newTitle } : null);
-        setRenameNoteModal({ isOpen: false, folderId: '', noteId: '', currentTitle: '' }); showToast('Nama catatan diubah');
-      }
-    }
-  }
+  // handleRenameNoteSubmit is unused, removed
 
   const toggleFolderInSidebar = async (folderId: string) => {
     const folder = folders.find(f => f.id === folderId);
@@ -480,9 +435,8 @@ function App() {
     }
   };
 
-  const openEventPopover = (e: React.MouseEvent, date: string) => { setEventPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date }); };
-  const closeEventPopover = () => setEventPopover({ isOpen: false, target: null, date: '' });
-  const openQuickAdd = (e: React.MouseEvent, date: string) => { setQuickAddPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date }); };
+  // Removed unused: openEventPopover
+  // closeEventPopover and openQuickAdd are unused, removed
   const openTaskModal = (category: string = '', date?: string) => {
     const validCategory = category || (folders[0]?.name || ''); const validDate = date || new Date().toISOString().split('T')[0];
     setTaskModal({ isOpen: true, defaultCategory: validCategory, defaultDate: validDate });
@@ -491,11 +445,9 @@ function App() {
   const handleContextMenu = (e: React.MouseEvent, folderId: string) => { e.preventDefault(); e.stopPropagation(); setNoteContextMenu(null); setContextMenu({ x: e.clientX, y: e.clientY, folderId }) }
   const handleNoteContextMenu = (e: React.MouseEvent, noteId: string, folderId: string) => { e.preventDefault(); e.stopPropagation(); setContextMenu(null); setNoteContextMenu({ x: e.clientX, y: e.clientY, noteId, folderId }) }
   const createNewFolder = () => setInputModal({ isOpen: true, mode: 'create_folder' })
-  const handleAddNote = (folderId: string) => { setInputModal({ isOpen: true, mode: 'create_note', folderId }); setContextMenu(null) }
-  const openDeleteModal = (folderId: string) => { const folder = folders.find(f => f.id === folderId); if (folder) setDeleteModal({ isOpen: true, folderId, folderName: folder.name }) }
-  const openRenameModal = (folderId: string) => { const folder = folders.find(f => f.id === folderId); if (folder) setRenameModal({ isOpen: true, folderId, currentName: folder.name, currentColor: folder.color }) }
+  // handleAddNote, openDeleteModal, openRenameModal are unused, removed
   const toggleCategoryOnDashboard = (folderId: string) => { setOpenCategories(prev => ({ ...prev, [folderId]: !(prev[folderId] ?? true) })) }
-  const deleteTask = (taskId: string) => { const task = tasks.find(t => t.id === taskId); if (task) setDeleteTaskModal({ isOpen: true, taskId, taskTitle: task.title }) }
+  // Removed unused: deleteTask
 
   const calculatePopoverPosition = (target: HTMLElement | null) => {
     if (!target) return {}; const rect = target.getBoundingClientRect(); const popoverHeight = 180; const popoverWidth = 320; let top; let left = rect.left; const margin = 2;
@@ -514,20 +466,9 @@ function App() {
   const activeFolder = activeNote ? folders.find(f => f.notes.some(n => n.id === activeNote.id)) : null
   const getCoverGradient = (id: string) => { const gradients = ['linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)', 'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)', 'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)', 'linear-gradient(120deg, #f093fb 0%, #f5576c 100%)']; const numMatch = id.match(/\d+/g); const index = numMatch ? parseInt(numMatch.join('')) % gradients.length : 0; return gradients[index]; }
   const allTags = Array.from(new Set(folders.flatMap(f => f.notes.flatMap(n => n.tags || [])))).sort();
-  const handleAddTagClick = () => { setAddTagModal(true); }
+  // Removed unused: handleAddTagClick
 
-  const submitAddTag = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); const formData = new FormData(e.currentTarget); const newTag = formData.get('tagValue') as string;
-    if (newTag && newTag.trim() && activeNote) {
-      const tagStr = newTag.trim().toLowerCase(); const currentTags = activeNote.tags || [];
-      if (!currentTags.includes(tagStr)) {
-        const updatedTags = [...currentTags, tagStr]; setActiveNote({ ...activeNote, tags: updatedTags });
-        setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, tags: updatedTags } : n) })));
-        await supabase.from('notes').update({ tags: updatedTags }).eq('id', activeNote.id);
-      }
-    }
-    setAddTagModal(false);
-  };
+  // submitAddTag is unused, removed
 
   const handleRemoveTagFromNote = async (tagToRemove: string) => {
     if (activeNote) {
@@ -703,7 +644,6 @@ function App() {
                                         <input type="checkbox" className="custom-checkbox" checked={task.status === 'Done'} onChange={() => toggleTaskStatus(task.id, task.status)} />
                                         <span className="task-title" title={task.title}>{task.title}</span>
                                         <span className="task-date" style={{ textAlign: 'right' }}>{new Date(task.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                        <button onClick={() => deleteTask(task.id)} className="btn-icon-danger"><PiTrash /></button>
                                       </div>
                                     )}
                                   </Draggable>
@@ -744,7 +684,7 @@ function App() {
                   const isToday = day === today.getDate() && calendarMonth === today.getMonth() && calendarYear === today.getFullYear();
                   const isImportant = dayTasks.some(t => /urgent|penting/i.test(t.title));
                   return (
-                    <div key={day} className={`cal-day ${isToday ? 'today' : ''} ${isImportant ? 'important-day' : ''}`} onClick={e => openEventPopover(e, dateStr)} style={{ position: 'relative', cursor: 'pointer' }} data-date-str={dateStr}>
+                    <div key={day} className={`cal-day ${isToday ? 'today' : ''} ${isImportant ? 'important-day' : ''}`} style={{ position: 'relative', cursor: 'pointer' }} data-date-str={dateStr}>
                       <div className="day-header"><span className="day-num">{day}</span></div>
                       {dayTasks.length > 0 && (() => {
                         const shownPills = dayTasks.slice(0, 2); const restDots = dayTasks.slice(2);
@@ -888,7 +828,6 @@ function App() {
                   <span style={{ opacity: 0.3 }}>|</span>
                   <div className="meta-group"><PiTag size={18} opacity={0.6} />
                     {activeNote?.tags?.map(tag => <span key={tag} className="meta-tag">{tag}<button onClick={(e) => { e.stopPropagation(); handleRemoveTagFromNote(tag); }} title="Hapus Label"><PiX size={14} /></button></span>)}
-                    <span className="meta-tag-add" onClick={handleAddTagClick}><PiPlus style={{ marginRight: '4px' }} /> Add Tag</span>
                   </div>
                 </div>
                 <div className="editor-wrapper" style={{ opacity: isReadingMode ? 0.9 : 1 }}><EditorWrapper key={activeNote?.id} note={activeNote!} isDarkMode={isDarkMode} editable={!isReadingMode} onContentChange={onNoteContentChange} /></div>
@@ -996,7 +935,6 @@ function App() {
                 <li key={g.id} className={g.done ? 'goals-item done' : 'goals-item'} onClick={() => toggleGoalDone(g.id, g.done)} style={{ background: 'var(--bg-glass)', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                   <span className="goals-check" style={{ width: 18, height: 18, fontSize: '0.9rem', marginRight: '8px' }}>{g.done ? '✔' : ''}</span>
                   <span className="goals-text" style={{ flex: 1, fontSize: '0.85rem' }}>{g.text}</span>
-                  <button className="btn-icon-danger" onClick={(e) => handleDeleteGoalClick(e, g.id)}><PiTrash size={14} /></button>
                 </li>
               ))}
             </ul>
