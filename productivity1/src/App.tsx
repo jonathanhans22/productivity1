@@ -82,37 +82,8 @@ function EditorWrapper({ note, isDarkMode, editable = true, onContentChange }: {
     saveTimeoutRef.current = setTimeout(async () => { await supabase.from('notes').update({ content }).eq('id', note.id); }, 1000);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.ctrlKey && (e.key === ']' || e.key === '[')) {
-      e.preventDefault(); e.stopPropagation();
-      const pmDom = document.querySelector('.ProseMirror') as HTMLElement;
-      if (pmDom) {
-        const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', keyCode: 9, which: 9, shiftKey: e.key === '[', bubbles: true, cancelable: true });
-        pmDom.dispatchEvent(tabEvent);
-      }
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    const cursor = editor.getTextCursorPosition();
-    if (cursor && cursor.block && (cursor.block.type === 'bulletListItem' || cursor.block.type === 'numberedListItem' || cursor.block.type === 'heading')) {
-      const plainText = e.clipboardData.getData('text/plain');
-      if (plainText) {
-        e.preventDefault(); e.stopPropagation();
-        const lines = plainText.split(/\r?\n/).filter(line => line.trim() !== '');
-        if (lines.length > 0) {
-          document.execCommand('insertText', false, lines[0]);
-          if (lines.length > 1) {
-            const newBlocks: any[] = lines.slice(1).map(line => ({ type: cursor.block.type, props: cursor.block.props, content: line }));
-            editor.insertBlocks(newBlocks, cursor.block, 'after');
-          }
-        }
-      }
-    }
-  };
-
   return (
-    <div onKeyDownCapture={handleKeyDown} onPasteCapture={handlePaste} style={{ width: '100%', height: '100%' }}>
+    <div style={{ width: '100%', height: '100%' }}>
       <BlockNoteView editor={editor} editable={editable} theme={isDarkMode ? 'dark' : 'light'} onChange={handleEditorChange} slashMenu={false}>
         <SuggestionMenuController triggerCharacter={"/"} getItems={async (query) => filterSuggestionItems(getCustomSlashMenuItems(editor), query)} />
       </BlockNoteView>
@@ -137,9 +108,9 @@ export const StrictModeDroppable = ({ children, ...props }: DroppableProps) => {
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true)
-  const [isZenMode] = useState(false)
+  const [isZenMode, setIsZenMode] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(true)
-  const [isReadingMode] = useState(false)
+  const [isReadingMode, setIsReadingMode] = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
 
   const [folders, setFolders] = useState<Folder[]>([])
@@ -148,21 +119,30 @@ function App() {
   const [goals, setGoals] = useState<{ id: string; text: string; done: boolean; mode: 'daily' | 'weekly' }[]>([]);
   const [history, setHistory] = useState<GoalHistory[]>([]);
 
-  // State Tampilan
+  // State Tampilan Utama
   const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'kanban' | 'priority' | 'note' | 'tag' | 'finance'>('dashboard');
   const [activeTag, setActiveTag] = useState<string>('')
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({})
 
+  // State Navigasi Keuangan
+  const [financeMonth, setFinanceMonth] = useState(new Date().getMonth());
+  const [financeYear, setFinanceYear] = useState(new Date().getFullYear());
+
+  // State Pop-up & Modal
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string } | null>(null)
   const [noteContextMenu, setNoteContextMenu] = useState<{ x: number; y: number; noteId: string; folderId: string } | null>(null)
 
-  // Removed unused: renameModal, setRenameModal, deleteModal, setDeleteModal, renameNoteModal, setRenameNoteModal, deleteNoteModal, setDeleteNoteModal, deleteTaskModal, setDeleteTaskModal
+  const [renameModal, setRenameModal] = useState<{ isOpen: boolean; folderId: string; currentName: string; currentColor: string }>({ isOpen: false, folderId: '', currentName: '', currentColor: '' })
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; folderId: string; folderName: string }>({ isOpen: false, folderId: '', folderName: '' })
+  const [renameNoteModal, setRenameNoteModal] = useState<{ isOpen: boolean; folderId: string; noteId: string; currentTitle: string }>({ isOpen: false, folderId: '', noteId: '', currentTitle: '' })
+  const [deleteNoteModal, setDeleteNoteModal] = useState<{ isOpen: boolean; folderId: string; noteId: string; noteTitle: string }>({ isOpen: false, folderId: '', noteId: '', noteTitle: '' })
+  const [deleteTaskModal, setDeleteTaskModal] = useState<{ isOpen: boolean; taskId: string; taskTitle: string }>({ isOpen: false, taskId: '', taskTitle: '' })
   const [inputModal, setInputModal] = useState<{ isOpen: boolean; mode: 'create_folder' | 'create_note'; folderId?: string }>({ isOpen: false, mode: 'create_folder' })
   const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' }[]>([])
   const [quickAddPopover, setQuickAddPopover] = useState<{ isOpen: boolean; target: HTMLElement | null; date: string }>({ isOpen: false, target: null, date: '' });
 
-  // Removed unused: deleteGoalModal, setDeleteGoalModal
-  // Removed unused: addTagModal, setAddTagModal
+  const [deleteGoalModal, setDeleteGoalModal] = useState<{ isOpen: boolean; goalId: string }>({ isOpen: false, goalId: '' });
+  const [addTagModal, setAddTagModal] = useState(false);
   const [financeModal, setFinanceModal] = useState<{ isOpen: boolean, type: 'income' | 'expense' }>({ isOpen: false, type: 'expense' });
 
   const [activeNote, setActiveNote] = useState<Note | null>(null)
@@ -171,7 +151,7 @@ function App() {
 
   const [taskModal, setTaskModal] = useState<{ isOpen: boolean; defaultCategory: string; defaultDate: string; }>({ isOpen: false, defaultCategory: '', defaultDate: new Date().toISOString().split('T')[0] })
   const [editEventModal, setEditEventModal] = useState<{ isOpen: boolean; event: Task | null }>({ isOpen: false, event: null });
-  // Removed unused: eventNotes, setEventNotes, openEventDetail, setOpenEventDetail, eventPopover, setEventPopover
+  const [eventPopover, setEventPopover] = useState<{ isOpen: boolean; target: HTMLElement | null; date: string }>({ isOpen: false, target: null, date: '' });
 
   useEffect(() => { fetchData(); }, []);
   useEffect(() => { document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light') }, [isDarkMode])
@@ -264,10 +244,55 @@ function App() {
     if (historyData) setHistory(historyData as GoalHistory[]);
   };
 
+  // --- LOGIKA KEUANGAN ---
+  const monthlyTransactions = transactions.filter(t => {
+    const d = new Date(t.date);
+    return d.getMonth() === financeMonth && d.getFullYear() === financeYear;
+  });
+
+  const totalIncome = monthlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalExpense = monthlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
+  const currentBalance = totalIncome - totalExpense;
+  const expensePercentage = totalIncome > 0 ? Math.round((totalExpense / totalIncome) * 100) : (totalExpense > 0 ? 100 : 0);
+
+  const formatRupiah = (number: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number);
+
+  const handleTransactionSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const txData = {
+      amount: parseFloat(formData.get('amount') as string),
+      type: financeModal.type,
+      category: formData.get('category') as string,
+      date: formData.get('date') as string,
+      description: formData.get('description') as string
+    };
+    const { data, error } = await supabase.from('transactions').insert([txData]).select().single();
+    
+    if (error) {
+      showToast('Gagal menyimpan transaksi (Periksa RLS Supabase)', 'error');
+      return;
+    }
+
+    if (data) {
+      setTransactions(prev => [data as Transaction, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      setFinanceModal({ isOpen: false, type: 'expense' });
+      showToast('Transaksi berhasil dicatat');
+    }
+  };
+
+  const deleteTransaction = async (id: string) => {
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    await supabase.from('transactions').delete().eq('id', id);
+    showToast('Transaksi dihapus');
+  };
+
+  // --- LOGIKA TUGAS & GOALS ---
   const [goalMode, setGoalMode] = useState<'daily' | 'weekly'>('daily');
   const [goalInput, setGoalInput] = useState('');
   const filteredGoals = goals.filter(g => g.mode === goalMode);
   const progress = filteredGoals.length === 0 ? 0 : Math.round(filteredGoals.filter(g => g.done).length / filteredGoals.length * 100);
+  const upcomingTasks = tasks.filter(t => t.status !== 'Done').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 3);
 
   const handleAddGoal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -277,27 +302,30 @@ function App() {
     }
   };
 
-  // Removed unused: handleDeleteGoalClick
-  // confirmDeleteGoal is unused, removed
+  const handleDeleteGoalClick = (e: React.MouseEvent, goalId: string) => { e.stopPropagation(); setDeleteGoalModal({ isOpen: true, goalId }); };
+  
+  const confirmDeleteGoal = async () => {
+    const goalId = deleteGoalModal.goalId; setGoals(prev => prev.filter(g => g.id !== goalId));
+    await supabase.from('goals').delete().eq('id', goalId); setDeleteGoalModal({ isOpen: false, goalId: '' }); showToast('Target dihapus');
+  };
+
   const toggleGoalDone = async (goalId: string, currentStatus: boolean) => {
     setGoals(goals.map(g => g.id === goalId ? { ...g, done: !currentStatus } : g));
     await supabase.from('goals').update({ is_done: !currentStatus }).eq('id', goalId);
   };
 
-  const handleInputSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); const formData = new FormData(e.currentTarget); const value = formData.get('inputValue') as string; const color = formData.get('inputColor') as string || '#6366f1';
-    if (!value) return;
-    if (inputModal.mode === 'create_folder') {
-      const { data } = await supabase.from('folders').insert([{ name: value, color: color, is_open: true }]).select().single();
-      if (data) { setFolders(prev => [...prev, { id: data.id, name: data.name, isOpen: data.is_open, notes: [], color: data.color }]); showToast('Folder dibuat'); }
-    } else if (inputModal.mode === 'create_note' && inputModal.folderId) {
-      const { data } = await supabase.from('notes').insert([{ folder_id: inputModal.folderId, title: value, type: 'note' }]).select().single();
-      if (data) {
-        const newNote: Note = { id: data.id, title: data.title, type: data.type, tags: [], icon: '', cover: '' };
-        setFolders(prev => prev.map(f => f.id === inputModal.folderId ? { ...f, notes: [...f.notes, newNote], isOpen: true } : f)); setActiveNote(newNote); setActiveView('note'); showToast('Catatan dibuat');
-      }
-    }
-    setInputModal({ ...inputModal, isOpen: false });
+  const toggleTaskStatus = async (taskId: string, currentStatus: string) => {
+    const cycle: Record<string, string> = { 'To Do': 'In Progress', 'In Progress': 'Done', 'Done': 'To Do' };
+    const newStatus = cycle[currentStatus] ?? 'To Do';
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+  }
+
+  const deleteTask = (taskId: string) => { const task = tasks.find(t => t.id === taskId); if (task) setDeleteTaskModal({ isOpen: true, taskId, taskTitle: task.title }) }
+
+  const confirmDeleteTask = async () => {
+    const taskId = deleteTaskModal.taskId; const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (!error) { setTasks(prev => prev.filter(t => t.id !== taskId)); setDeleteTaskModal({ isOpen: false, taskId: '', taskTitle: '' }); showToast('Tugas dihapus') }
   }
 
   const handleTaskSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -322,42 +350,23 @@ function App() {
     if (data) { setTasks(prev => prev.map(t => t.id === data.id ? (data as Task) : t)); setEditEventModal({ isOpen: false, event: null }); showToast('Event diubah'); }
   };
 
-  const handleTransactionSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const amount = parseFloat(formData.get('amount') as string);
-    const txData = {
-      amount, type: financeModal.type, category: formData.get('category') as string,
-      date: formData.get('date') as string, description: formData.get('description') as string
-    };
-
-    const { data, error } = await supabase.from('transactions').insert([txData]).select().single();
-    if (error) { showToast('Gagal menyimpan transaksi', 'error'); return; }
-    if (data) {
-      setTransactions(prev => [data as Transaction, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-      setFinanceModal({ isOpen: false, type: 'expense' });
-      showToast('Transaksi berhasil dicatat');
-    }
-  };
-
-  const deleteTransaction = async (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-    await supabase.from('transactions').delete().eq('id', id);
-    showToast('Transaksi dihapus');
-  };
-
-  const toggleTaskStatus = async (taskId: string, currentStatus: string) => {
-    const cycle: Record<string, string> = { 'To Do': 'In Progress', 'In Progress': 'Done', 'Done': 'To Do' };
-    const newStatus = cycle[currentStatus] ?? 'To Do';
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-    await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
-  }
-
-  // confirmDeleteTask is unused, removed
-
   const assignPriority = async (taskId: string, level: string | null) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority_level: level } : t));
     await supabase.from('tasks').update({ priority_level: level }).eq('id', taskId);
+  };
+
+  const onDragEnd = async (result: DropResult) => {
+    const { source, destination, draggableId } = result; if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+    const taskToMove = tasks.find(t => t.id === draggableId); if (!taskToMove) return;
+    const destFolder = folders.find(f => f.id === destination.droppableId); const destCategory = destFolder ? destFolder.name : taskToMove.category;
+    const newTasks = tasks.filter(t => t.id !== draggableId); const destinationTasks = newTasks.filter(t => t.category === destCategory);
+    let insertionIndex;
+    if (destination.index === 0) { const firstTaskOfCategory = newTasks.find(t => t.category === destCategory); insertionIndex = firstTaskOfCategory ? newTasks.indexOf(firstTaskOfCategory) : newTasks.length; }
+    else { const taskBefore = destinationTasks[destination.index - 1]; insertionIndex = newTasks.indexOf(taskBefore) + 1; }
+    newTasks.splice(insertionIndex, 0, { ...taskToMove, category: destCategory });
+    setTasks(newTasks);
+    if (taskToMove.category !== destCategory) await supabase.from('tasks').update({ category: destCategory }).eq('id', taskToMove.id);
   };
 
   const onPriorityDragEnd = async (result: DropResult) => {
@@ -376,13 +385,92 @@ function App() {
     if (taskToMove.priority_level !== newLevel) await supabase.from('tasks').update({ priority_level: newLevel }).eq('id', taskToMove.id);
   };
 
-  // confirmDeleteFolder is unused, removed
+  // --- LOGIKA FOLDER & NOTE ---
+  const handleInputSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); const formData = new FormData(e.currentTarget); const value = formData.get('inputValue') as string; const color = formData.get('inputColor') as string || '#6366f1';
+    if (!value) return;
+    if (inputModal.mode === 'create_folder') {
+      const { data } = await supabase.from('folders').insert([{ name: value, color: color, is_open: true }]).select().single();
+      if (data) { setFolders(prev => [...prev, { id: data.id, name: data.name, isOpen: data.is_open, notes: [], color: data.color }]); showToast('Folder dibuat'); }
+    } else if (inputModal.mode === 'create_note' && inputModal.folderId) {
+      const { data } = await supabase.from('notes').insert([{ folder_id: inputModal.folderId, title: value, type: 'note' }]).select().single();
+      if (data) {
+        const newNote: Note = { id: data.id, title: data.title, type: data.type, tags: [], icon: '', cover: '' };
+        setFolders(prev => prev.map(f => f.id === inputModal.folderId ? { ...f, notes: [...f.notes, newNote], isOpen: true } : f)); setActiveNote(newNote); setActiveView('note'); showToast('Catatan dibuat');
+      }
+    }
+    setInputModal({ ...inputModal, isOpen: false });
+  }
 
-  // confirmDeleteNote is unused, removed
+  const createNewFolder = () => setInputModal({ isOpen: true, mode: 'create_folder' });
+  const handleAddNote = (folderId: string) => { setInputModal({ isOpen: true, mode: 'create_note', folderId }); setContextMenu(null) }
+  
+  const openDeleteModal = (folderId: string) => { const folder = folders.find(f => f.id === folderId); if (folder) setDeleteModal({ isOpen: true, folderId, folderName: folder.name }) }
+  const openRenameModal = (folderId: string) => { const folder = folders.find(f => f.id === folderId); if (folder) setRenameModal({ isOpen: true, folderId, currentName: folder.name, currentColor: folder.color }) }
+  const toggleCategoryOnDashboard = (folderId: string) => { setOpenCategories(prev => ({ ...prev, [folderId]: !(prev[folderId] ?? true) })) }
 
-  // handleRenameFolder is unused, removed
+  const confirmDeleteFolder = async () => {
+    const { folderId, folderName } = deleteModal; const { error } = await supabase.from('folders').delete().eq('id', folderId);
+    if (!error) { setFolders(prev => prev.filter(f => f.id !== folderId)); setTasks(prev => prev.filter(t => t.category !== folderName)); setDeleteModal({ isOpen: false, folderId: '', folderName: '' }); showToast('Folder dihapus'); }
+  }
 
-  // handleRenameNoteSubmit is unused, removed
+  const confirmDeleteNote = async () => {
+    const { folderId, noteId } = deleteNoteModal; const { error } = await supabase.from('notes').delete().eq('id', noteId);
+    if (!error) {
+      setFolders(prev => prev.map(f => { if (f.id === folderId) return { ...f, notes: f.notes.filter(n => n.id !== noteId) }; return f; }));
+      if (activeNote?.id === noteId) { setActiveNote(null); setActiveView('dashboard'); }
+      setDeleteNoteModal({ isOpen: false, folderId: '', noteId: '', noteTitle: '' }); showToast('Catatan dihapus');
+    }
+  }
+
+  const handleRenameFolder = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); const formData = new FormData(e.currentTarget); const newName = formData.get('newName') as string; const newColor = formData.get('folderColor') as string;
+    const { folderId, currentName: oldName, currentColor } = renameModal;
+    if (!newName || (newName === oldName && newColor === currentColor)) { setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' }); return; }
+    const { error } = await supabase.from('folders').update({ name: newName, color: newColor }).eq('id', folderId);
+    if (!error) {
+      if (newName !== oldName) await supabase.from('tasks').update({ category: newName }).eq('category', oldName);
+      setFolders(prev => prev.map(f => (f.id === folderId ? { ...f, name: newName, color: newColor } : f)));
+      setTasks(prev => prev.map(t => (t.category === oldName ? { ...t, category: newName } : t)));
+      setRenameModal({ isOpen: false, folderId: '', currentName: '', currentColor: '' }); showToast('Folder diubah');
+    }
+  }
+
+  const handleRenameNoteSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); const formData = new FormData(e.currentTarget); const newTitle = formData.get('newNoteTitle') as string;
+    const { folderId, noteId } = renameNoteModal;
+    if (newTitle) {
+      const { error } = await supabase.from('notes').update({ title: newTitle }).eq('id', noteId);
+      if (!error) {
+        setFolders(prev => prev.map(f => { if (f.id === folderId) return { ...f, notes: f.notes.map(n => n.id === noteId ? { ...n, title: newTitle } : n) }; return f; }));
+        if (activeNote?.id === noteId) setActiveNote(prev => prev ? { ...prev, title: newTitle } : null);
+        setRenameNoteModal({ isOpen: false, folderId: '', noteId: '', currentTitle: '' }); showToast('Nama catatan diubah');
+      }
+    }
+  }
+
+  const handleAddTagClick = () => { setAddTagModal(true); }
+  const submitAddTag = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); const formData = new FormData(e.currentTarget); const newTag = formData.get('tagValue') as string;
+    if (newTag && newTag.trim() && activeNote) {
+      const tagStr = newTag.trim().toLowerCase(); const currentTags = activeNote.tags || [];
+      if (!currentTags.includes(tagStr)) {
+        const updatedTags = [...currentTags, tagStr]; setActiveNote({ ...activeNote, tags: updatedTags });
+        setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, tags: updatedTags } : n) })));
+        await supabase.from('notes').update({ tags: updatedTags }).eq('id', activeNote.id);
+      }
+    }
+    setAddTagModal(false);
+  };
+
+  const handleRemoveTagFromNote = async (tagToRemove: string) => {
+    if (activeNote) {
+      const updatedTags = (activeNote.tags || []).filter(t => t !== tagToRemove);
+      setActiveNote({ ...activeNote, tags: updatedTags });
+      setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, tags: updatedTags } : n) })));
+      await supabase.from('notes').update({ tags: updatedTags }).eq('id', activeNote.id);
+    }
+  }
 
   const toggleFolderInSidebar = async (folderId: string) => {
     const folder = folders.find(f => f.id === folderId);
@@ -391,20 +479,6 @@ function App() {
       await supabase.from('folders').update({ is_open: !folder.isOpen }).eq('id', folderId);
     }
   }
-
-  const onDragEnd = async (result: DropResult) => {
-    const { source, destination, draggableId } = result; if (!destination) return;
-    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
-    const taskToMove = tasks.find(t => t.id === draggableId); if (!taskToMove) return;
-    const destFolder = folders.find(f => f.id === destination.droppableId); const destCategory = destFolder ? destFolder.name : taskToMove.category;
-    const newTasks = tasks.filter(t => t.id !== draggableId); const destinationTasks = newTasks.filter(t => t.category === destCategory);
-    let insertionIndex;
-    if (destination.index === 0) { const firstTaskOfCategory = newTasks.find(t => t.category === destCategory); insertionIndex = firstTaskOfCategory ? newTasks.indexOf(firstTaskOfCategory) : newTasks.length; }
-    else { const taskBefore = destinationTasks[destination.index - 1]; insertionIndex = newTasks.indexOf(taskBefore) + 1; }
-    newTasks.splice(insertionIndex, 0, { ...taskToMove, category: destCategory });
-    setTasks(newTasks);
-    if (taskToMove.category !== destCategory) await supabase.from('tasks').update({ category: destCategory }).eq('id', taskToMove.id);
-  };
 
   const onNoteTitleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
@@ -435,8 +509,11 @@ function App() {
     }
   };
 
-  // Removed unused: openEventPopover
-  // closeEventPopover and openQuickAdd are unused, removed
+  // --- FUNGSI HELPER UI & POP-UPS ---
+  const openEventPopover = (e: React.MouseEvent, date: string) => { setEventPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date }); };
+  const closeEventPopover = () => setEventPopover({ isOpen: false, target: null, date: '' });
+  const openQuickAdd = (e: React.MouseEvent, date: string) => { setQuickAddPopover({ isOpen: true, target: e.currentTarget as HTMLElement, date }); };
+  
   const openTaskModal = (category: string = '', date?: string) => {
     const validCategory = category || (folders[0]?.name || ''); const validDate = date || new Date().toISOString().split('T')[0];
     setTaskModal({ isOpen: true, defaultCategory: validCategory, defaultDate: validDate });
@@ -444,10 +521,6 @@ function App() {
 
   const handleContextMenu = (e: React.MouseEvent, folderId: string) => { e.preventDefault(); e.stopPropagation(); setNoteContextMenu(null); setContextMenu({ x: e.clientX, y: e.clientY, folderId }) }
   const handleNoteContextMenu = (e: React.MouseEvent, noteId: string, folderId: string) => { e.preventDefault(); e.stopPropagation(); setContextMenu(null); setNoteContextMenu({ x: e.clientX, y: e.clientY, noteId, folderId }) }
-  const createNewFolder = () => setInputModal({ isOpen: true, mode: 'create_folder' })
-  // handleAddNote, openDeleteModal, openRenameModal are unused, removed
-  const toggleCategoryOnDashboard = (folderId: string) => { setOpenCategories(prev => ({ ...prev, [folderId]: !(prev[folderId] ?? true) })) }
-  // Removed unused: deleteTask
 
   const calculatePopoverPosition = (target: HTMLElement | null) => {
     if (!target) return {}; const rect = target.getBoundingClientRect(); const popoverHeight = 180; const popoverWidth = 320; let top; let left = rect.left; const margin = 2;
@@ -466,18 +539,6 @@ function App() {
   const activeFolder = activeNote ? folders.find(f => f.notes.some(n => n.id === activeNote.id)) : null
   const getCoverGradient = (id: string) => { const gradients = ['linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)', 'linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)', 'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)', 'linear-gradient(120deg, #f093fb 0%, #f5576c 100%)']; const numMatch = id.match(/\d+/g); const index = numMatch ? parseInt(numMatch.join('')) % gradients.length : 0; return gradients[index]; }
   const allTags = Array.from(new Set(folders.flatMap(f => f.notes.flatMap(n => n.tags || [])))).sort();
-  // Removed unused: handleAddTagClick
-
-  // submitAddTag is unused, removed
-
-  const handleRemoveTagFromNote = async (tagToRemove: string) => {
-    if (activeNote) {
-      const updatedTags = (activeNote.tags || []).filter(t => t !== tagToRemove);
-      setActiveNote({ ...activeNote, tags: updatedTags });
-      setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, tags: updatedTags } : n) })));
-      await supabase.from('notes').update({ tags: updatedTags }).eq('id', activeNote.id);
-    }
-  }
 
   const handleSelectIcon = async (iconStr: string) => { if (!activeNote) return; setActiveNote({ ...activeNote, icon: iconStr }); setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, icon: iconStr } : n) }))); setShowIconPicker(false); try { await supabase.from('notes').update({ icon: iconStr }).eq('id', activeNote.id); } catch (e) { } }
   const handleSelectCover = async (coverStr: string) => { if (!activeNote) return; setActiveNote({ ...activeNote, cover: coverStr }); setFolders(prev => prev.map(f => ({ ...f, notes: f.notes.map(n => n.id === activeNote.id ? { ...n, cover: coverStr } : n) }))); setShowCoverPicker(false); try { await supabase.from('notes').update({ cover: coverStr }).eq('id', activeNote.id); } catch (e) { } }
@@ -505,27 +566,11 @@ function App() {
     return cards;
   };
 
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const monthlyTransactions = transactions.filter(t => { const d = new Date(t.date); return d.getMonth() === currentMonth && d.getFullYear() === currentYear; });
-  const totalIncome = monthlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalExpense = monthlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-  const currentBalance = totalIncome - totalExpense;
-  const formatRupiah = (number: number) => { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number); }
-
-  // --- TAMBAHAN LOGIKA WIDGET KANAN DI SINI ---
-  const upcomingTasks = tasks
-    .filter(t => t.status !== 'Done')
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 3); 
-
-  const expensePercentage = totalIncome > 0 ? Math.round((totalExpense / totalIncome) * 100) : 0;
-  // --------------------------------------------
-
   return (
     <div className={`app-container ${isZenMode ? 'zen-mode' : ''}`} onClick={() => { setShowIconPicker(false); setShowCoverPicker(false); }}>
       <div className="aurora-bg"></div>
 
+      {/* Global Search Pop-up */}
       {showCommandPalette && (
         <div className="modal-overlay" style={{ alignItems: 'flex-start', paddingTop: '12vh', backdropFilter: 'blur(8px)' }} onClick={() => setShowCommandPalette(false)}>
           <div className="command-palette-card" style={{ width: '100%', maxWidth: '560px', background: 'var(--bg-main)', borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 24px 60px rgba(0,0,0,0.3)', padding: '1rem' }} onClick={e => e.stopPropagation()}>
@@ -540,10 +585,7 @@ function App() {
       {/* KOLOM 1: NAVIGASI KIRI */}
       {!isZenMode && (
         <nav className="sidebar-rail" onClick={() => setIsSidebarOpen(false)}>
-          <div className="rail-avatar" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
-            <img src={logoSaya} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </div>
-
+          <div className="rail-avatar"><img src={logoSaya} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
           <button className={`rail-icon ${activeView === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setActiveView('dashboard'); setIsSidebarOpen(false); }} title="Task Lists"><PiTelevision /></button>
           <button className={`rail-icon ${activeView === 'kanban' ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setActiveView('kanban'); setIsSidebarOpen(false); }} title="Kanban Board"><PiStack /></button>
           <button className={`rail-icon ${activeView === 'calendar' ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setActiveView('calendar'); setIsSidebarOpen(false); }} title="Calendar"><PiCalendar /></button>
@@ -610,15 +652,13 @@ function App() {
                  (<><PiFolder color="var(--accent)" /> My Notes</>)}
               </span>
             </div>
-            {/* Toggle Panel Kanan */}
-            <button className="btn-graph" onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} style={{ padding: '8px' }} title="Toggle Right Panel">
-              <PiSidebarSimple size={20} />
-            </button>
+            <button className="btn-graph" onClick={() => setIsRightPanelOpen(!isRightPanelOpen)} style={{ padding: '8px' }} title="Toggle Right Panel"><PiSidebarSimple size={20} /></button>
           </header>
         )}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: activeView === 'note' ? '0' : '0 2rem 2rem' }}>
           
+          {/* DASHBOARD VIEW */}
           {activeView === 'dashboard' && (
             <div className="dashboard-view" style={{ padding: 0 }}>
               <DragDropContext onDragEnd={onDragEnd}>
@@ -644,6 +684,7 @@ function App() {
                                         <input type="checkbox" className="custom-checkbox" checked={task.status === 'Done'} onChange={() => toggleTaskStatus(task.id, task.status)} />
                                         <span className="task-title" title={task.title}>{task.title}</span>
                                         <span className="task-date" style={{ textAlign: 'right' }}>{new Date(task.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                        <button onClick={() => deleteTask(task.id)} className="btn-icon-danger"><PiTrash /></button>
                                       </div>
                                     )}
                                   </Draggable>
@@ -663,6 +704,7 @@ function App() {
             </div>
           )}
 
+          {/* CALENDAR VIEW */}
           {activeView === 'calendar' && (
             <div className="calendar-views" style={{ marginTop: '1rem' }}>
               <div className="calendar-nav-bar">
@@ -683,8 +725,10 @@ function App() {
                   const dayTasks = tasks.filter(t => t.date === dateStr)
                   const isToday = day === today.getDate() && calendarMonth === today.getMonth() && calendarYear === today.getFullYear();
                   const isImportant = dayTasks.some(t => /urgent|penting/i.test(t.title));
+                  
                   return (
-                    <div key={day} className={`cal-day ${isToday ? 'today' : ''} ${isImportant ? 'important-day' : ''}`} style={{ position: 'relative', cursor: 'pointer' }} data-date-str={dateStr}>
+                    // === DI SINI PERBAIKANNYA: onClick ditambahkan kembali ===
+                    <div key={day} className={`cal-day ${isToday ? 'today' : ''} ${isImportant ? 'important-day' : ''}`} onClick={e => openEventPopover(e, dateStr)} style={{ position: 'relative', cursor: 'pointer' }} data-date-str={dateStr}>
                       <div className="day-header"><span className="day-num">{day}</span></div>
                       {dayTasks.length > 0 && (() => {
                         const shownPills = dayTasks.slice(0, 2); const restDots = dayTasks.slice(2);
@@ -706,6 +750,7 @@ function App() {
             </div>
           )}
 
+          {/* KANBAN VIEW */}
           {activeView === 'kanban' && (
             <div className="kanban-wrapper" style={{ marginTop: '1rem' }}>
               <DragDropContext onDragEnd={async (result) => {
@@ -750,20 +795,20 @@ function App() {
 
           {activeView === 'priority' && <div style={{ marginTop: '1rem' }}><PriorityView tasks={tasks} onAssign={assignPriority} onDragEnd={onPriorityDragEnd} /></div>}
 
-          {/* TAMPILAN KEUANGAN */}
+          {/* FINANCE VIEW */}
           {activeView === 'finance' && (
             <div className="finance-dashboard" style={{ marginTop: '1rem' }}>
               <div className="finance-summary-cards">
                 <div className="finance-card">
-                  <div className="finance-card-title"><PiWallet size={18} /> Sisa Saldo Bulan Ini</div>
+                  <div className="finance-card-title"><PiWallet size={18} /> Sisa Saldo ({monthNames[financeMonth]})</div>
                   <div className="finance-card-amount">{formatRupiah(currentBalance)}</div>
                 </div>
                 <div className="finance-card">
-                  <div className="finance-card-title"><PiArrowUpRight size={18} color="#10b981" /> Pemasukan</div>
+                  <div className="finance-card-title" style={{ color: '#10b981' }}><PiArrowUpRight /> Pemasukan</div>
                   <div className="finance-card-amount" style={{ color: '#10b981' }}>{formatRupiah(totalIncome)}</div>
                 </div>
                 <div className="finance-card">
-                  <div className="finance-card-title"><PiArrowDownRight size={18} color="#ef4444" /> Pengeluaran</div>
+                  <div className="finance-card-title" style={{ color: '#ef4444' }}><PiArrowDownRight /> Pengeluaran</div>
                   <div className="finance-card-amount" style={{ color: '#ef4444' }}>{formatRupiah(totalExpense)}</div>
                 </div>
               </div>
@@ -777,10 +822,10 @@ function App() {
                   </div>
                 </div>
 
-                {transactions.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Belum ada data transaksi.</div>
+                {monthlyTransactions.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>Belum ada data transaksi di bulan ini.</div>
                 ) : (
-                  transactions.map(tx => (
+                  monthlyTransactions.map(tx => (
                     <div key={tx.id} className="transaction-row">
                       <div className={`tx-icon ${tx.type}`}>{tx.type === 'income' ? <PiArrowUpRight /> : <PiArrowDownRight />}</div>
                       <div className="tx-details">
@@ -797,6 +842,7 @@ function App() {
             </div>
           )}
 
+          {/* NOTE VIEW */}
           {activeView === 'note' && activeNote && (
             <div className="document-container">
               <div className="document-cover" style={{ background: activeNote?.cover || getCoverGradient(activeNote?.id || '0'), backgroundSize: 'cover', backgroundPosition: 'center' }}>
@@ -828,6 +874,7 @@ function App() {
                   <span style={{ opacity: 0.3 }}>|</span>
                   <div className="meta-group"><PiTag size={18} opacity={0.6} />
                     {activeNote?.tags?.map(tag => <span key={tag} className="meta-tag">{tag}<button onClick={(e) => { e.stopPropagation(); handleRemoveTagFromNote(tag); }} title="Hapus Label"><PiX size={14} /></button></span>)}
+                    <span className="meta-tag-add" onClick={handleAddTagClick}><PiPlus style={{ marginRight: '4px' }} /> Add Tag</span>
                   </div>
                 </div>
                 <div className="editor-wrapper" style={{ opacity: isReadingMode ? 0.9 : 1 }}><EditorWrapper key={activeNote?.id} note={activeNote!} isDarkMode={isDarkMode} editable={!isReadingMode} onContentChange={onNoteContentChange} /></div>
@@ -840,75 +887,56 @@ function App() {
       {/* KOLOM 3: PANEL KONTEKS KANAN */}
       {!isZenMode && isRightPanelOpen && (
         <aside className="right-panel">
-          {/* WIDGET 1: MONTHLY CASHFLOW */}
+          
+          {/* WIDGET KEUANGAN */}
           <div className="finance-mini-widget">
-            <div className="widget-header">
-              <PiWallet size={20} color="var(--accent)" />
-              <span>Arus Kas Bulan Ini</span>
+            <div className="widget-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <PiWallet size={20} color="var(--accent)" />
+                <span>Arus Kas</span>
+              </div>
+              <div className="finance-nav-mini">
+                <button onClick={() => { if (financeMonth === 0) { setFinanceMonth(11); setFinanceYear(y => y - 1); } else { setFinanceMonth(m => m - 1); } }}>&lt;</button>
+                <span>{monthNames[financeMonth].substring(0,3)} {financeYear}</span>
+                <button onClick={() => { if (financeMonth === 11) { setFinanceMonth(0); setFinanceYear(y => y + 1); } else { setFinanceMonth(m => m + 1); } }}>&gt;</button>
+              </div>
             </div>
             
             <div className="finance-donut-container">
-              {/* Grafik Donat Kiri */}
-              <div 
-                className="finance-donut" 
-                style={{ 
-                  '--spent': `${Math.min(expensePercentage, 100)}%`, 
-                  '--color': expensePercentage > 85 ? '#ef4444' : 'var(--accent)' 
-                } as React.CSSProperties}
-              >
+              <div className="finance-donut" style={{ '--spent': `${Math.min(expensePercentage, 100)}%`, '--color': expensePercentage > 85 ? '#ef4444' : 'var(--accent)' } as React.CSSProperties}>
                 <div className="finance-donut-inner">
                   <span className="donut-percentage">{expensePercentage}%</span>
                   <span className="donut-label">Terpakai</span>
                 </div>
               </div>
-
-              {/* Rincian Angka Kanan */}
               <div className="finance-breakdown">
                 <div className="breakdown-item">
                   <span className="bd-dot" style={{ background: '#10b981' }}></span>
-                  <div className="bd-text">
-                    <span className="bd-title">Pemasukan</span>
-                    <span className="bd-amount">{formatRupiah(totalIncome)}</span>
-                  </div>
+                  <div className="bd-text"><span className="bd-title">Masuk</span><span className="bd-amount">{formatRupiah(totalIncome)}</span></div>
                 </div>
                 <div className="breakdown-item">
                   <span className="bd-dot" style={{ background: expensePercentage > 85 ? '#ef4444' : 'var(--accent)' }}></span>
-                  <div className="bd-text">
-                    <span className="bd-title">Pengeluaran</span>
-                    <span className="bd-amount">{formatRupiah(totalExpense)}</span>
-                  </div>
+                  <div className="bd-text"><span className="bd-title">Keluar</span><span className="bd-amount">{formatRupiah(totalExpense)}</span></div>
                 </div>
               </div>
             </div>
-            
-            <div className="finance-balance-footer">
-              Sisa Saldo: <strong>{formatRupiah(currentBalance)}</strong>
-            </div>
+            <div className="finance-balance-footer">Sisa Saldo: <strong>{formatRupiah(currentBalance)}</strong></div>
           </div>
 
-          {/* WIDGET 2: UPCOMING DEADLINES */}
+          {/* WIDGET DEADLINES */}
           <div className="upcoming-widget">
-            <div className="widget-header">
-              <PiCalendar size={20} color="var(--accent)" />
-              <span>Tenggat Terdekat</span>
-            </div>
+            <div className="widget-header"><PiCalendar size={20} color="var(--accent)" /><span>Tenggat Terdekat</span></div>
             <ul className="upcoming-list">
-              {upcomingTasks.length === 0 ? (
-                <li className="upcoming-empty">Semua tugas selesai! 🎉</li>
-              ) : (
-                upcomingTasks.map(task => (
-                  <li key={task.id} className="upcoming-item">
-                    <div className="upcoming-dot" style={{ background: folders.find(f => f.name === task.category)?.color || 'var(--accent)' }} />
-                    <div className="upcoming-info">
-                      <span className="upcoming-title">{task.title}</span>
-                      <span className="upcoming-date">{new Date(task.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
-                    </div>
-                  </li>
-                ))
-              )}
+              {upcomingTasks.map(task => (
+                <li key={task.id} className="upcoming-item">
+                  <div className="upcoming-dot" style={{ background: folders.find(f => f.name === task.category)?.color || 'var(--accent)' }} />
+                  <div className="upcoming-info"><span className="upcoming-title">{task.title}</span><span className="upcoming-date">{new Date(task.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span></div>
+                </li>
+              ))}
             </ul>
           </div>
 
+          {/* WIDGET GOALS */}
           <div className="goals-section" style={{ boxShadow: 'none', padding: 0, margin: 0, background: 'transparent', maxWidth: '100%' }}>
             <div className="goals-header" style={{ marginBottom: '1rem' }}>
               <span className={goalMode === 'daily' ? 'goals-mode active' : 'goals-mode'} onClick={() => setGoalMode('daily')}>Daily</span>
@@ -935,6 +963,7 @@ function App() {
                 <li key={g.id} className={g.done ? 'goals-item done' : 'goals-item'} onClick={() => toggleGoalDone(g.id, g.done)} style={{ background: 'var(--bg-glass)', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                   <span className="goals-check" style={{ width: 18, height: 18, fontSize: '0.9rem', marginRight: '8px' }}>{g.done ? '✔' : ''}</span>
                   <span className="goals-text" style={{ flex: 1, fontSize: '0.85rem' }}>{g.text}</span>
+                  <button className="btn-icon-danger" onClick={(e) => handleDeleteGoalClick(e, g.id)}><PiTrash size={14} /></button>
                 </li>
               ))}
             </ul>
@@ -942,9 +971,80 @@ function App() {
         </aside>
       )}
 
-      {/* --- SEMUA MODAL POPUP --- */}
+      {/* --- SEMUA MODAL & POP-UP --- */}
       
-      {/* Modal Tambah Transaksi Keuangan (TANPA PANAH BAWAH) */}
+      {/* 1. Modal Tambah Folder / Note */}
+      {inputModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setInputModal({ ...inputModal, isOpen: false })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>{inputModal.mode === 'create_folder' ? 'New Folder' : 'New Note'}</h3>
+            <form onSubmit={handleInputSubmit}>
+              <div className="form-group"><label>Name</label><input name="inputValue" className="form-control" autoFocus required placeholder={inputModal.mode === 'create_folder' ? 'Folder Name...' : 'Title...'} /></div>
+              {inputModal.mode === 'create_folder' && (<div className="form-group"><label>Folder Color</label><input name="inputColor" type="color" className="form-control" defaultValue="#6366f1" style={{ width: 48, height: 32, padding: 0, border: 'none', background: 'none' }} /></div>)}
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setInputModal({ ...inputModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Create</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal Tambah Tag */}
+      {addTagModal && (
+        <div className="modal-overlay" onClick={() => setAddTagModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Add Label</h3>
+            <form onSubmit={submitAddTag}>
+              <div className="form-group"><label>Nama Label Baru</label><input name="tagValue" className="form-control" autoFocus required placeholder="Contoh: penting, riset, draft..." /></div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setAddTagModal(false)}>Batal</button><button type="submit" className="btn-primary">Tambah</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal Tambah Event / Tugas */}
+      {taskModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setTaskModal({ ...taskModal, isOpen: false })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Add New Task</h3>
+            <form onSubmit={handleTaskSubmit}>
+              <div className="form-group"><label>Task Name</label><input name="title" className="form-control" autoFocus required placeholder="Example: Thesis Chapter 2" /></div>
+              <div className="form-group">
+                <label>Category</label>
+                <select name="category" className="form-control" defaultValue={taskModal.defaultCategory || (folders[0]?.name || '')}>
+                  {folders.length === 0 ? <option value="">No categories</option> : folders.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Date</label>
+                <DatePicker selected={new Date(taskModal.defaultDate)} onChange={(date: Date | null) => { if (date) { setTaskModal(prev => ({ ...prev, defaultDate: date.toISOString().split('T')[0] })); } }} dateFormat="yyyy-MM-dd" customInput={<CustomDateInput />} />
+              </div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setTaskModal({ ...taskModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Save</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Modal Edit Event */}
+      {editEventModal.isOpen && editEventModal.event && (
+        <div className="modal-overlay" onClick={() => setEditEventModal({ isOpen: false, event: null })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Edit Event</h3>
+            <form onSubmit={handleEditEventSubmit}>
+              <div className="form-group"><label>Title</label><input name="title" className="form-control" defaultValue={editEventModal.event.title} required /></div>
+              <div className="form-group"><label>Category</label><select name="category" className="form-control" defaultValue={editEventModal.event.category}>{folders.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}</select></div>
+              <div className="form-group"><label>Date</label><DatePicker selected={new Date(editEventModal.event.date)} onChange={(date: Date | null) => { if (date) { setEditEventModal(prev => ({ ...prev, event: prev.event ? { ...prev.event, date: date.toISOString().split('T')[0] } : null })); } }} dateFormat="yyyy-MM-dd" customInput={<CustomDateInput />} /></div>
+              <div className="form-group">
+                <label>Status</label>
+                <select name="status" className="form-control" defaultValue={editEventModal.event.status}>
+                  <option value="To Do">To Do</option><option value="In Progress">In Progress</option><option value="Done">Done</option>
+                </select>
+              </div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setEditEventModal({ isOpen: false, event: null })}>Cancel</button><button type="submit" className="btn-primary">Save</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Modal Tambah Transaksi Keuangan */}
       {financeModal.isOpen && (
         <div className="modal-overlay" onClick={() => setFinanceModal({ ...financeModal, isOpen: false })}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -952,35 +1052,98 @@ function App() {
               Tambah {financeModal.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
             </h3>
             <form onSubmit={handleTransactionSubmit}>
-              <div className="form-group">
-                <label>Nominal (Rp)</label>
-                <input type="number" name="amount" className="form-control" autoFocus required placeholder="Contoh: 50000" min="0" />
-              </div>
-              <div className="form-group">
-                <label>Kategori</label>
-                <select name="category" className="form-control">
-                  {FINANCE_CATEGORIES[financeModal.type].map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Keterangan</label>
-                <input name="description" className="form-control" required placeholder={financeModal.type === 'expense' ? "Contoh: Makan di Kantin Soto Umi Leha..." : "Contoh: Project web, Uang bulanan..."} />
-              </div>
-              <div className="form-group">
-                <label>Tanggal</label>
-                <input type="date" name="date" className="form-control" required defaultValue={new Date().toISOString().split('T')[0]} />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setFinanceModal({ ...financeModal, isOpen: false })}>Batal</button>
-                <button type="submit" className="btn-primary" style={{ background: financeModal.type === 'income' ? '#10b981' : '#ef4444' }}>Simpan</button>
-              </div>
+              <div className="form-group"><label>Nominal (Rp)</label><input type="number" name="amount" className="form-control" autoFocus required placeholder="Contoh: 50000" min="0" /></div>
+              <div className="form-group"><label>Kategori</label><select name="category" className="form-control">{FINANCE_CATEGORIES[financeModal.type].map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div>
+              <div className="form-group"><label>Keterangan</label><input name="description" className="form-control" required placeholder={financeModal.type === 'expense' ? "Contoh: Makan di Kantin..." : "Contoh: Project web..."} /></div>
+              <div className="form-group"><label>Tanggal</label><input type="date" name="date" className="form-control" required defaultValue={new Date().toISOString().split('T')[0]} /></div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setFinanceModal({ ...financeModal, isOpen: false })}>Batal</button><button type="submit" className="btn-primary" style={{ background: financeModal.type === 'income' ? '#10b981' : '#ef4444' }}>Simpan</button></div>
             </form>
           </div>
         </div>
       )}
 
-      {quickAddPopover.isOpen && (
-        {/* Modal Pop-up Kalender (Event Popover) */}
+      {/* 6. Context Menu Hapus/Rename (Klik Kanan Sidebar) */}
+      {contextMenu && (
+        <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={e => e.stopPropagation()}>
+          <div className="context-item" onClick={() => handleAddNote(contextMenu.folderId)}><PiFilePlus style={{ marginRight: '8px' }} /> New Note</div>
+          <div className="context-item" onClick={() => { openRenameModal(contextMenu.folderId); setContextMenu(null); }}><PiPencilSimple style={{ marginRight: '8px' }} /> Rename Category</div>
+          <div className="context-item delete" onClick={() => { openDeleteModal(contextMenu.folderId); setContextMenu(null); }}><PiTrash style={{ marginRight: '8px' }} /> Delete Category</div>
+        </div>
+      )}
+
+      {noteContextMenu && (
+        <div className="context-menu" style={{ top: noteContextMenu.y, left: noteContextMenu.x }} onClick={e => e.stopPropagation()}>
+          <div className="context-item" onClick={() => {
+            const note = folders.flatMap(f => f.notes).find(n => n.id === noteContextMenu.noteId);
+            if (note) setRenameNoteModal({ isOpen: true, folderId: noteContextMenu.folderId, noteId: note.id, currentTitle: note.title });
+            setNoteContextMenu(null);
+          }}><PiPencilSimple style={{ marginRight: '8px' }} /> Rename Note</div>
+          <div className="context-item delete" onClick={() => {
+            const note = folders.flatMap(f => f.notes).find(n => n.id === noteContextMenu.noteId);
+            if (note) setDeleteNoteModal({ isOpen: true, folderId: noteContextMenu.folderId, noteId: note.id, noteTitle: note.title });
+            setNoteContextMenu(null);
+          }}><PiTrash style={{ marginRight: '8px' }} /> Delete Note</div>
+        </div>
+      )}
+
+      {/* 7. Modal Konfirmasi Hapus Folder/Note/Task */}
+      {deleteModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0, color: '#ef4444' }}>Delete Category</h3>
+            <p>Are you sure you want to delete <strong>"{deleteModal.folderName}"</strong>? All notes and tasks inside will be permanently deleted.</p>
+            <div className="modal-actions"><button className="btn-cancel" onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}>Cancel</button><button className="btn-primary" style={{ background: '#ef4444' }} onClick={confirmDeleteFolder}>Delete Permanently</button></div>
+          </div>
+        </div>
+      )}
+
+      {deleteNoteModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setDeleteNoteModal({ ...deleteNoteModal, isOpen: false })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0, color: '#ef4444' }}>Delete Note</h3>
+            <p>Are you sure you want to delete <strong>"{deleteNoteModal.noteTitle}"</strong>?</p>
+            <div className="modal-actions"><button className="btn-cancel" onClick={() => setDeleteNoteModal({ ...deleteNoteModal, isOpen: false })}>Cancel</button><button className="btn-primary" style={{ background: '#ef4444' }} onClick={confirmDeleteNote}>Delete Permanently</button></div>
+          </div>
+        </div>
+      )}
+
+      {deleteTaskModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setDeleteTaskModal({ ...deleteTaskModal, isOpen: false })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0, color: '#ef4444' }}>Delete Task</h3>
+            <p>Are you sure you want to delete <strong>"{deleteTaskModal.taskTitle}"</strong>?</p>
+            <div className="modal-actions"><button className="btn-cancel" onClick={() => setDeleteTaskModal({ ...deleteTaskModal, isOpen: false })}>Cancel</button><button className="btn-primary" style={{ background: '#ef4444' }} onClick={confirmDeleteTask}>Delete Permanently</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Modal Rename Folder/Note */}
+      {renameModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setRenameModal({ ...renameModal, isOpen: false })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Rename Category</h3>
+            <form onSubmit={handleRenameFolder}>
+              <div className="form-group"><label>New Name</label><input name="newName" className="form-control" defaultValue={renameModal.currentName} autoFocus required /></div>
+              <div className="form-group"><label>Color</label><input name="folderColor" type="color" className="form-control" defaultValue={renameModal.currentColor} style={{ width: 48, height: 32, padding: 0, border: 'none', background: 'none' }} /></div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setRenameModal({ ...renameModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Save Changes</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {renameNoteModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setRenameNoteModal({ ...renameNoteModal, isOpen: false })}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Rename Note</h3>
+            <form onSubmit={handleRenameNoteSubmit}>
+              <div className="form-group"><label>New Title</label><input name="newNoteTitle" className="form-control" defaultValue={renameNoteModal.currentTitle} autoFocus required /></div>
+              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setRenameNoteModal({ ...renameNoteModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Save Changes</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Pop-up Klik Kalender (Agenda Harian) */}
       {eventPopover.isOpen && (
         <div className="modal-overlay transparent" onClick={closeEventPopover}>
           <div className="quick-add-popover" style={calculatePopoverPosition(eventPopover.target)} onClick={e => e.stopPropagation()}>
@@ -1017,79 +1180,7 @@ function App() {
         </div>
       )}
 
-      {editEventModal.isOpen && editEventModal.event && (
-        <div className="modal-overlay" onClick={() => setEditEventModal({ isOpen: false, event: null })}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>Edit Event</h3>
-            <form onSubmit={handleEditEventSubmit}>
-              <div className="form-group">
-                <label>Title</label>
-                <input name="title" className="form-control" defaultValue={editEventModal.event.title} required />
-              </div>
-              <div className="form-group">
-                <label>Category</label>
-                <select name="category" className="form-control" defaultValue={editEventModal.event.category}>
-                  {folders.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Date</label>
-                <DatePicker selected={new Date(editEventModal.event.date)} onChange={(date: Date | null) => { if (date) { setEditEventModal(prev => ({ ...prev, event: prev.event ? { ...prev.event, date: date.toISOString().split('T')[0] } : null })); } }} dateFormat="yyyy-MM-dd" customInput={<CustomDateInput />} />
-              </div>
-              <div className="form-group">
-                <label>Status</label>
-                <select name="status" className="form-control" defaultValue={editEventModal.event.status}>
-                  <option value="To Do">To Do</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Done">Done</option>
-                </select>
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setEditEventModal({ isOpen: false, event: null })}>Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {taskModal.isOpen && (
-        <div className="modal-overlay" onClick={() => setTaskModal({ ...taskModal, isOpen: false })}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>Add New Task</h3>
-            <form onSubmit={handleTaskSubmit}>
-              <div className="form-group"><label>Task Name</label><input name="title" className="form-control" autoFocus required placeholder="Example: Thesis Chapter 2" /></div>
-              <div className="form-group">
-                <label>Category</label>
-                <select name="category" className="form-control" defaultValue={taskModal.defaultCategory || (folders[0]?.name || '')}>
-                  {folders.length === 0 ? <option value="">No categories</option> : folders.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Date</label>
-                <DatePicker selected={new Date(taskModal.defaultDate)} onChange={(date: Date | null) => { if (date) { setTaskModal(prev => ({ ...prev, defaultDate: date.toISOString().split('T')[0] })); } }} dateFormat="yyyy-MM-dd" customInput={<CustomDateInput />} />
-              </div>
-              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setTaskModal({ ...taskModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Save</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Sisa modal lainnya seperti Hapus, Rename, dll */}
-      {inputModal.isOpen && (
-        <div className="modal-overlay" onClick={() => setInputModal({ ...inputModal, isOpen: false })}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>{inputModal.mode === 'create_folder' ? 'New Folder' : 'New Note'}</h3>
-            <form onSubmit={handleInputSubmit}>
-              <div className="form-group"><label>Name</label><input name="inputValue" className="form-control" autoFocus required placeholder={inputModal.mode === 'create_folder' ? 'Folder Name...' : 'Title...'} /></div>
-              {inputModal.mode === 'create_folder' && (<div className="form-group"><label>Folder Color</label><input name="inputColor" type="color" className="form-control" defaultValue="#6366f1" style={{ width: 48, height: 32, padding: 0, border: 'none', background: 'none' }} /></div>)}
-              <div className="modal-actions"><button type="button" className="btn-cancel" onClick={() => setInputModal({ ...inputModal, isOpen: false })}>Cancel</button><button type="submit" className="btn-primary">Create</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification */}
+      {/* Toast Notification Container */}
       <div className="toast-container">
         {toasts.map(toast => (
           <div key={toast.id} className={`toast ${toast.type}`}>
