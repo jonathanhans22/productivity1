@@ -980,22 +980,39 @@ function App() {
       )}
 
       {quickAddPopover.isOpen && (
-        <div className="modal-overlay transparent" onClick={() => setQuickAddPopover({ isOpen: false, target: null, date: '' })}>
-          <div className="quick-add-popover" style={calculatePopoverPosition(quickAddPopover.target)} onClick={e => e.stopPropagation()}>
-            <h4 className="quick-add-title">Quick Add Task</h4>
-            <form onSubmit={handleQuickAddSubmit}>
-              <input name="title" className="form-control" placeholder="Example: Finish report" autoFocus required />
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Category</label>
-                <select name="category" className="form-control" defaultValue={activeFolder?.name || (folders[0]?.name || '')}>
-                  {folders.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
-                </select>
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setQuickAddPopover({ isOpen: false, target: null, date: '' })}>Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
-            </form>
+        {/* Modal Pop-up Kalender (Event Popover) */}
+      {eventPopover.isOpen && (
+        <div className="modal-overlay transparent" onClick={closeEventPopover}>
+          <div className="quick-add-popover" style={calculatePopoverPosition(eventPopover.target)} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                Agenda: {new Date(eventPopover.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </h4>
+              <button className="toast-close" style={{ position: 'relative', right: 0, top: 0, transform: 'none' }} onClick={closeEventPopover}><PiX /></button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px', maxHeight: '200px', overflowY: 'auto' }}>
+              {tasks.filter(t => t.date === eventPopover.date).length === 0 && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '10px 0' }}>Kosong. Tidak ada agenda.</div>
+              )}
+              {tasks.filter(t => t.date === eventPopover.date).map(t => (
+                <div key={t.id} style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
+                  <span style={{ width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0, background: folders.find(f => f.name === t.category)?.color || 'var(--accent)' }}></span>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                </div>
+              ))}
+            </div>
+
+            <button 
+              className="btn-primary" 
+              style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '6px' }} 
+              onClick={() => {
+                closeEventPopover();
+                openTaskModal(folders[0]?.name || '', eventPopover.date);
+              }}
+            >
+              <PiPlus /> Tambah Event
+            </button>
           </div>
         </div>
       )}
