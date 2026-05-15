@@ -4419,3 +4419,50 @@ select.form-control {
   font-size: 0.9rem;
   margin-left: 4px;
 }
+/* =======================================================
+   FIX: NAVIGATOR BULAN KEUANGAN (MINI)
+   ======================================================= */
+.finance-nav-mini {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.finance-nav-mini button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.finance-nav-mini button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.finance-nav-mini span {
+  min-width: 65px;
+  text-align: center;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Mencegah tulisan "Arus Kas" terpotong/turun ke bawah */
+.widget-header span {
+  white-space: nowrap;
+}
